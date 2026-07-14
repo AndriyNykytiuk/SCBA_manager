@@ -1,6 +1,6 @@
 import type { PoolClient } from 'pg';
 
-export type AuditAction = 'create' | 'update' | 'archive' | 'restore';
+export type AuditAction = 'create' | 'update' | 'archive' | 'restore' | 'delete';
 
 export interface AuditEntry {
   userId: string;

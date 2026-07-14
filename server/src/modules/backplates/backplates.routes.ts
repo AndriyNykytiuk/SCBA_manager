@@ -14,6 +14,7 @@ import { asyncHandler, parse } from '../../shared/http';
 import { listEnvelope, listQuerySchema, offsetOf, parseSort } from '../../shared/pagination';
 import { backplateCondition } from '../../shared/status';
 import { diffChanges, writeAudit } from '../audit/audit.service';
+import { writeArchiveEntry } from '../archive/archive.service';
 
 export const backplatesRouter = Router();
 backplatesRouter.use(authenticate);
@@ -96,6 +97,87 @@ async function getCardOr404(id: string): Promise<any> {
   const { rows } = await pool.query(`${CARD_SELECT} WHERE b.id = $1`, [id]);
   if (!rows[0]) throw errors.notFound('Ложамент не знайдено');
   return rows[0];
+}
+
+/**
+ * Повний знімок ложамента + всіх апаратів, що на ньому коли-небудь базувались (кожен з їхньою
+ * власною історією складу балонів і участі в заправках) — пишеться в архів перед фізичним DELETE.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function buildDeleteSnapshot(backplate: any) {
+  const apps = await pool.query(
+    `SELECT a.id, a.notes, a.created_at, a.updated_at, a.archived_at,
+            sl.name AS storage_location_name
+       FROM apparatus a
+       LEFT JOIN storage_location sl ON sl.id = a.storage_location_id
+      WHERE a.backplate_id = $1
+      ORDER BY a.created_at DESC`,
+    [backplate.id],
+  );
+  const appIds: string[] = apps.rows.map((a) => a.id);
+  const installsByApp = new Map<string, unknown[]>();
+  const sessionsByApp = new Map<string, unknown[]>();
+  if (appIds.length > 0) {
+    const installs = await pool.query(
+      `SELECT ac.apparatus_id, ac.id, ac.position, ac.installed_at, ac.removed_at,
+              cy.id AS cylinder_id, cy.number AS cylinder_number,
+              iu.full_name AS installed_by_name, ru.full_name AS removed_by_name
+         FROM apparatus_cylinder ac
+         LEFT JOIN cylinder cy ON cy.id = ac.cylinder_id
+         LEFT JOIN app_user iu ON iu.id = ac.installed_by
+         LEFT JOIN app_user ru ON ru.id = ac.removed_by
+        WHERE ac.apparatus_id = ANY($1)
+        ORDER BY ac.installed_at DESC`,
+      [appIds],
+    );
+    for (const r of installs.rows) {
+      const list = installsByApp.get(r.apparatus_id) ?? [];
+      list.push({
+        id: r.id,
+        position: r.position,
+        installed_at: r.installed_at,
+        removed_at: r.removed_at,
+        cylinder: r.cylinder_id ? { id: r.cylinder_id, number: r.cylinder_number } : null,
+        installed_by: r.installed_by_name,
+        removed_by: r.removed_by_name,
+      });
+      installsByApp.set(r.apparatus_id, list);
+    }
+    const sessions = await pool.query(
+      `SELECT fsi.apparatus_id, fs.id AS session_id, fs.started_at, fs.ended_at,
+              fs.pressure_before_bar, fs.pressure_target_bar, c.name AS compressor_name
+         FROM fill_session_item fsi
+         JOIN fill_session fs ON fs.id = fsi.fill_session_id
+         JOIN compressor c ON c.id = fs.compressor_id
+        WHERE fsi.apparatus_id = ANY($1)
+        ORDER BY fs.started_at DESC`,
+      [appIds],
+    );
+    for (const r of sessions.rows) {
+      const list = sessionsByApp.get(r.apparatus_id) ?? [];
+      list.push({
+        fill_session_id: r.session_id,
+        started_at: r.started_at,
+        ended_at: r.ended_at,
+        pressure_before_bar: r.pressure_before_bar,
+        pressure_target_bar: r.pressure_target_bar,
+        compressor_name: r.compressor_name,
+      });
+      sessionsByApp.set(r.apparatus_id, list);
+    }
+  }
+  return {
+    backplate: serialize(backplate),
+    apparatuses: apps.rows.map((a) => ({
+      id: a.id,
+      storage_location: a.storage_location_name,
+      notes: a.notes,
+      created_at: a.created_at,
+      archived_at: a.archived_at,
+      cylinder_installations: installsByApp.get(a.id) ?? [],
+      fill_sessions: sessionsByApp.get(a.id) ?? [],
+    })),
+  };
 }
 
 async function assertNameFree(stationId: string, name: string, excludeId?: string) {
@@ -310,5 +392,61 @@ backplatesRouter.post(
       });
     });
     res.json(serialize(await getCardOr404(before.id)));
+  }),
+);
+
+/**
+ * Справжнє видалення з бази (MVP). Перед видаленням повний знімок ложамента + всіх апаратів,
+ * що на ньому базувались (з їхньою історією), пишеться в deleted_entity_archive (GET /archive).
+ * - Не списаний ложамент: дозволено лише без історії використання (інакше — спершу /archive).
+ * - Списаний ложамент: дозволено завжди; апарати, що коли-небудь на ньому базувались, видаляються
+ *   з робочих таблиць разом з ним (лишаються в архіві) — самі балони не чіпаються, компресор
+ *   і решта його сесій заправки теж лишаються недоторканими.
+ */
+backplatesRouter.delete(
+  '/:id',
+  requireRole('master', 'admin'),
+  asyncHandler(async (req, res) => {
+    const before = await getCardOr404(req.params.id);
+    assertRecordInScope(req.user!, before.station_id);
+    if (!before.archived_at) {
+      const { rows } = await pool.query(
+        `SELECT EXISTS (SELECT 1 FROM apparatus WHERE backplate_id = $1) AS in_apparatus`,
+        [before.id],
+      );
+      if (rows[0].in_apparatus) {
+        throw errors.conflict(
+          `Ложамент ${before.name} має історію використання — спершу спишіть його`,
+        );
+      }
+    }
+    const snapshot = await buildDeleteSnapshot(before);
+    await withTransaction(async (client) => {
+      await writeArchiveEntry(client, {
+        stationId: before.station_id,
+        entityType: 'backplate',
+        entityId: before.id,
+        label: before.name,
+        snapshot,
+        deletedBy: req.user!.id,
+      });
+      const appIds = snapshot.apparatuses.map((a) => a.id as string);
+      if (appIds.length > 0) {
+        await client.query(`DELETE FROM fill_session_item WHERE apparatus_id = ANY($1)`, [appIds]);
+        await client.query(`DELETE FROM apparatus_cylinder WHERE apparatus_id = ANY($1)`, [appIds]);
+        await client.query(`DELETE FROM apparatus WHERE id = ANY($1)`, [appIds]);
+      }
+      await client.query(`DELETE FROM backplate WHERE id = $1`, [before.id]);
+      await writeAudit(client, {
+        userId: req.user!.id,
+        stationId: before.station_id,
+        entityType: 'backplate',
+        entityId: before.id,
+        action: 'delete',
+        changes: { name: { old: before.name, new: null } },
+        requestId: req.requestId,
+      });
+    });
+    res.status(204).end();
   }),
 );

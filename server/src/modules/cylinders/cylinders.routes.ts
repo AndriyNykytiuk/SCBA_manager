@@ -14,6 +14,7 @@ import { asyncHandler, parse } from '../../shared/http';
 import { listEnvelope, listQuerySchema, offsetOf, parseSort } from '../../shared/pagination';
 import { cylinderCondition } from '../../shared/status';
 import { diffChanges, writeAudit } from '../audit/audit.service';
+import { writeArchiveEntry } from '../archive/archive.service';
 
 export const cylindersRouter = Router();
 cylindersRouter.use(authenticate);
@@ -147,6 +148,72 @@ async function getCardOr404(id: string): Promise<any> {
   const { rows } = await pool.query(`${CARD_SELECT} WHERE cy.id = $1`, [id]);
   if (!rows[0]) throw errors.notFound('Балон не знайдено');
   return rows[0];
+}
+
+/** Повний знімок балона + вся його історія — пишеться в архів перед фізичним DELETE. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function buildDeleteSnapshot(cylinder: any) {
+  const [hydroTests, installations, fillSessions] = await Promise.all([
+    pool.query(
+      `SELECT ht.id, to_char(ht.tested_at, 'YYYY-MM-DD') AS tested_at, ht.notes, ht.created_at,
+              pu.id AS performed_by_id, pu.full_name AS performed_by_name
+         FROM hydro_test ht
+         LEFT JOIN app_user pu ON pu.id = ht.performed_by
+        WHERE ht.cylinder_id = $1
+        ORDER BY ht.tested_at DESC, ht.created_at DESC`,
+      [cylinder.id],
+    ),
+    pool.query(
+      `SELECT ac.id, ac.position, ac.installed_at, ac.removed_at,
+              a.id AS apparatus_id, bp.name AS apparatus_name,
+              iu.full_name AS installed_by_name, ru.full_name AS removed_by_name
+         FROM apparatus_cylinder ac
+         LEFT JOIN apparatus a ON a.id = ac.apparatus_id
+         LEFT JOIN backplate bp ON bp.id = a.backplate_id
+         LEFT JOIN app_user iu ON iu.id = ac.installed_by
+         LEFT JOIN app_user ru ON ru.id = ac.removed_by
+        WHERE ac.cylinder_id = $1
+        ORDER BY ac.installed_at DESC`,
+      [cylinder.id],
+    ),
+    pool.query(
+      `SELECT fs.id AS session_id, fs.started_at, fs.ended_at,
+              fs.pressure_before_bar, fs.pressure_target_bar, c.name AS compressor_name
+         FROM fill_session_item fsi
+         JOIN fill_session fs ON fs.id = fsi.fill_session_id
+         JOIN compressor c ON c.id = fs.compressor_id
+        WHERE fsi.cylinder_id = $1
+        ORDER BY fs.started_at DESC`,
+      [cylinder.id],
+    ),
+  ]);
+  return {
+    cylinder: serialize(cylinder),
+    hydro_tests: hydroTests.rows.map((r) => ({
+      id: r.id,
+      tested_at: r.tested_at,
+      notes: r.notes,
+      created_at: r.created_at,
+      performed_by: r.performed_by_id ? { id: r.performed_by_id, full_name: r.performed_by_name } : null,
+    })),
+    installations: installations.rows.map((r) => ({
+      id: r.id,
+      position: r.position,
+      installed_at: r.installed_at,
+      removed_at: r.removed_at,
+      apparatus: r.apparatus_id ? { id: r.apparatus_id, name: r.apparatus_name } : null,
+      installed_by: r.installed_by_name,
+      removed_by: r.removed_by_name,
+    })),
+    fill_sessions: fillSessions.rows.map((r) => ({
+      fill_session_id: r.session_id,
+      started_at: r.started_at,
+      ended_at: r.ended_at,
+      pressure_before_bar: r.pressure_before_bar,
+      pressure_target_bar: r.pressure_target_bar,
+      compressor_name: r.compressor_name,
+    })),
+  };
 }
 
 async function assertNumberFree(stationId: string, number: string, excludeId?: string) {
@@ -504,5 +571,60 @@ cylindersRouter.post(
       });
     });
     res.json(serialize(await getCardOr404(before.id)));
+  }),
+);
+
+/**
+ * Справжнє видалення з бази (MVP). Перед видаленням повний знімок балона + його історії
+ * (гідротести, установки, участь у заправках) пишеться в deleted_entity_archive (GET /archive).
+ * - Не списаний балон: дозволено лише без історії використання (інакше — спершу /archive).
+ * - Списаний балон: дозволено завжди; власна історія видаляється з робочих таблиць (лишається
+ *   в архіві). Апарати/компресори, до яких він мав стосунок, залишаються — губиться лише
+ *   цей конкретний рядок їхньої історії.
+ */
+cylindersRouter.delete(
+  '/:id',
+  requireRole('master', 'admin'),
+  asyncHandler(async (req, res) => {
+    const before = await getCardOr404(req.params.id);
+    assertRecordInScope(req.user!, before.station_id);
+    if (!before.archived_at) {
+      const { rows } = await pool.query(
+        `SELECT
+           EXISTS (SELECT 1 FROM apparatus_cylinder WHERE cylinder_id = $1) AS in_apparatus,
+           EXISTS (SELECT 1 FROM fill_session_item WHERE cylinder_id = $1)  AS in_fill_session`,
+        [before.id],
+      );
+      if (rows[0].in_apparatus || rows[0].in_fill_session) {
+        throw errors.conflict(
+          `Балон №${before.number} має історію використання — спершу спишіть його`,
+        );
+      }
+    }
+    const snapshot = await buildDeleteSnapshot(before);
+    await withTransaction(async (client) => {
+      await writeArchiveEntry(client, {
+        stationId: before.station_id,
+        entityType: 'cylinder',
+        entityId: before.id,
+        label: `№${before.number}`,
+        snapshot,
+        deletedBy: req.user!.id,
+      });
+      await client.query(`DELETE FROM fill_session_item WHERE cylinder_id = $1`, [before.id]);
+      await client.query(`DELETE FROM apparatus_cylinder WHERE cylinder_id = $1`, [before.id]);
+      await client.query(`DELETE FROM hydro_test WHERE cylinder_id = $1`, [before.id]);
+      await client.query(`DELETE FROM cylinder WHERE id = $1`, [before.id]);
+      await writeAudit(client, {
+        userId: req.user!.id,
+        stationId: before.station_id,
+        entityType: 'cylinder',
+        entityId: before.id,
+        action: 'delete',
+        changes: { number: { old: before.number, new: null } },
+        requestId: req.requestId,
+      });
+    });
+    res.status(204).end();
   }),
 );

@@ -9,6 +9,9 @@ const envSchema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
   BCRYPT_ROUNDS: z.coerce.number().int().min(4).max(15).default(10),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  // Продакшн: клієнт і сервер на різних доменах (Render). Список origin через кому.
+  // Локально/дев не потрібен — vite dev-proxy робить same-origin.
+  CLIENT_ORIGIN: z.string().trim().min(1).optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
