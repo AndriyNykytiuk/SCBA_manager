@@ -1,0 +1,51 @@
+# Render Blueprint — SCBA Manager (server + client). БД (Supabase) сюди НЕ входить —
+# це зовнішній керований Postgres, DATABASE_URL вводиться вручну в дашборді.
+#
+# Після першого деплою:
+#   1. Скопіюйте URL сервісу scba-manager-api (https://scba-manager-api.onrender.com)
+#      і вставте його як VITE_API_URL нижче (+ "/api/v1"), потім передеплойте клієнт.
+#   2. Скопіюйте URL сервісу scba-manager-client і вставте його як CLIENT_ORIGIN
+#      у сервері, потім передеплойте сервер.
+# (Значення sync: false — Render попросить ввести їх вручну в дашборді, нічого
+# в git не потрапляє.)
+
+services:
+  - type: web
+    name: scba-manager-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # Supabase connection string (Settings → Database → Connection string, "URI"),
+        # обов'язково з ?sslmode=require
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_TTL_SECONDS
+        value: 3600
+      - key: REFRESH_TOKEN_TTL_DAYS
+        value: 30
+      - key: BCRYPT_ROUNDS
+        value: 10
+      - key: CLIENT_ORIGIN
+        sync: false # напр. https://scba-manager-client.onrender.com (без / в кінці)
+
+  - type: web
+    name: scba-manager-client
+    runtime: static
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false # напр. https://scba-manager-api.onrender.com/api/v1
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

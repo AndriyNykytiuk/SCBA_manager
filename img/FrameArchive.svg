@@ -1,0 +1,18 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M20 40H52L60 52H108V104H20V40Z" fill="#475569" stroke="#0F172A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M44 32H84V52" fill="#94A3B8"/>
+<path d="M44 32H84V52" stroke="#0F172A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M32 44V24H76V52H32V44Z" fill="#F5F5F7" stroke="#0F172A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M40 32H68" stroke="#0F172A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M40 40H60" stroke="#0F172A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M20 52H108V104H20V52Z" fill="#F97316" stroke="#0F172A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M48 86C53.5228 86 58 81.5228 58 76C58 70.4772 53.5228 66 48 66C42.4772 66 38 70.4772 38 76C38 81.5228 42.4772 86 48 86Z" fill="#94A3B8" stroke="#0F172A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M50 61H46C45.4477 61 45 61.4477 45 62V64C45 64.5523 45.4477 65 46 65H50C50.5523 65 51 64.5523 51 64V62C51 61.4477 50.5523 61 50 61Z" fill="#94A3B8" stroke="#0F172A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M50 87H46C45.4477 87 45 87.4477 45 88V90C45 90.5523 45.4477 91 46 91H50C50.5523 91 51 90.5523 51 90V88C51 87.4477 50.5523 87 50 87Z" fill="#94A3B8" stroke="#0F172A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M36 73H34C33.4477 73 33 73.4477 33 74V78C33 78.5523 33.4477 79 34 79H36C36.5523 79 37 78.5523 37 78V74C37 73.4477 36.5523 73 36 73Z" fill="#94A3B8" stroke="#0F172A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M62 73H60C59.4477 73 59 73.4477 59 74V78C59 78.5523 59.4477 79 60 79H62C62.5523 79 63 78.5523 63 78V74C63 73.4477 62.5523 73 62 73Z" fill="#94A3B8" stroke="#0F172A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M48 80C50.2091 80 52 78.2091 52 76C52 73.7909 50.2091 72 48 72C45.7909 72 44 73.7909 44 76C44 78.2091 45.7909 80 48 80Z" fill="#1E293B" stroke="#0F172A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M84 91C90.0751 91 95 86.0751 95 80C95 73.9249 90.0751 69 84 69C77.9249 69 73 73.9249 73 80C73 86.0751 77.9249 91 84 91Z" fill="#FBBF24" stroke="#0F172A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M84 80V74" stroke="#0F172A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M84 80H89" stroke="#0F172A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
