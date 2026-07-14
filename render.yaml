@@ -16,15 +16,16 @@ services:
     plan: free
     region: frankfurt
     rootDir: server
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        sync: false # Supabase connection string (Settings → Database → Connection string, "URI"),
-        # обов'язково з ?sslmode=require
+        sync: false # Supabase Session Pooler URI (Settings → Database → Connection string).
+        # ОБОВ'ЯЗКОВО з ?sslmode=no-verify (sslmode=require ловить self-signed cert error
+        # на пулері Supabase — перевірено на практиці).
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: JWT_ACCESS_TTL_SECONDS
@@ -40,7 +41,7 @@ services:
     name: scba-manager-client
     runtime: static
     rootDir: client
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
