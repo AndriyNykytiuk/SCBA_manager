@@ -119,3 +119,12 @@ export function useRestoreCylinder(id: string) {
     onSuccess: invalidate,
   });
 }
+
+/** Справжнє видалення з бази — лише для балонів без історії використання (MVP). */
+export function useDeleteCylinder(id: string) {
+  const invalidate = useInvalidateCylinders();
+  return useMutation({
+    mutationFn: () => api<void>(`/cylinders/${id}`, { method: 'DELETE' }),
+    onSuccess: invalidate,
+  });
+}

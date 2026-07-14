@@ -373,3 +373,77 @@ export interface DashboardAlerts {
   counters: { overdue: number; warning: number; ok: number };
   data: DashboardAlertItem[];
 }
+
+// ===== Archive (справжнє видалення балонів/ложаментів, MVP) =====
+export type ArchiveEntityType = 'cylinder' | 'backplate';
+
+export interface ArchiveEntry {
+  id: string;
+  station_id: string;
+  entity_type: ArchiveEntityType;
+  entity_id: string;
+  label: string;
+  deleted_at: string;
+  deleted_by: UserRef | null;
+}
+
+export interface ArchivedHydroTest {
+  id: string;
+  tested_at: string;
+  notes: string | null;
+  created_at: string;
+  performed_by: UserRef | null;
+}
+
+export interface ArchivedInstallation {
+  id: string;
+  position: number;
+  installed_at: string;
+  removed_at: string | null;
+  apparatus: { id: string; name: string } | null;
+  installed_by: string | null;
+  removed_by: string | null;
+}
+
+export interface ArchivedFillSession {
+  fill_session_id: string;
+  started_at: string;
+  ended_at: string | null;
+  pressure_before_bar: number;
+  pressure_target_bar: number;
+  compressor_name: string;
+}
+
+export interface ArchivedCylinderSnapshot {
+  cylinder: Cylinder;
+  hydro_tests: ArchivedHydroTest[];
+  installations: ArchivedInstallation[];
+  fill_sessions: ArchivedFillSession[];
+}
+
+export interface ArchivedApparatus {
+  id: string;
+  storage_location: string | null;
+  notes: string | null;
+  created_at: string;
+  archived_at: string | null;
+  cylinder_installations: Array<{
+    id: string;
+    position: number;
+    installed_at: string;
+    removed_at: string | null;
+    cylinder: { id: string; number: string } | null;
+    installed_by: string | null;
+    removed_by: string | null;
+  }>;
+  fill_sessions: ArchivedFillSession[];
+}
+
+export interface ArchivedBackplateSnapshot {
+  backplate: Backplate;
+  apparatuses: ArchivedApparatus[];
+}
+
+export interface ArchiveDetail extends ArchiveEntry {
+  snapshot: ArchivedCylinderSnapshot | ArchivedBackplateSnapshot;
+}

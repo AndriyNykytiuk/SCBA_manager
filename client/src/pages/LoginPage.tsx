@@ -40,7 +40,7 @@ export function LoginPage() {
     <div className="login-page">
       <form className="login-card" onSubmit={submit}>
         <div className="login-card__logo">
-          <Shield size={48} color="var(--color-brand)" aria-hidden="true" />
+          <Shield size={48} color="var(--color-accent)" aria-hidden="true" />
           <h1>SCBA Manager</h1>
           <p className="login-card__subtitle">Облік дихальних апаратів</p>
         </div>

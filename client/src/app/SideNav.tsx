@@ -1,10 +1,26 @@
 import { NavLink } from 'react-router-dom';
-import { Backpack, Building2, Cog, Cylinder, Home, Package, Users } from 'lucide-react';
+import PumpFlow from '../../../img/Frame_1.svg';
+import Logament from '../../../img/Framelogament.svg';
+import Archive1 from '../../../img/FrameArchive.svg';
+import Compressor from '../../../img/FrameCompressor.svg';
+import Baloon from '../../../img/FrameBalonSCBA.svg';
+import scba from '../../../img/FrameAparatus.svg';
+import {
+  Archive,
+  Backpack,
+  Building2,
+  Cog,
+  Cylinder,
+  Fuel,
+  Home,
+  Package,
+  Users,
+} from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useAlertCounters } from '../api/dashboard';
 
 export function SideNav() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, canEdit } = useAuth();
   const counters = useAlertCounters();
   const overdue = counters.data?.overdue ?? 0;
 
@@ -22,20 +38,26 @@ export function SideNav() {
           </span>
         )}
       </NavLink>
+      {canEdit && (
+        <NavLink to="/fill-session" className={cls} title="Заправка">
+          <img src={PumpFlow} width={44} height={44} alt="" aria-hidden="true" />
+          <span className="sidenav__label">Заправка</span>
+        </NavLink>
+      )}
       <NavLink to="/backplates" className={cls} title="Ложаменти">
-        <Backpack size={24} aria-hidden="true" />
+        <img src={Logament} width={44} height={44} alt="" aria-hidden="true" />
         <span className="sidenav__label">Ложаменти</span>
       </NavLink>
       <NavLink to="/cylinders" className={cls} title="Балони">
-        <Cylinder size={24} aria-hidden="true" />
+        <img src={Baloon} width={44} height={44} alt="" aria-hidden="true" />
         <span className="sidenav__label">Балони</span>
       </NavLink>
       <NavLink to="/apparatus" className={cls} title="Апарати">
-        <Package size={24} aria-hidden="true" />
+        <img src={scba} width={44} height={44} alt="" aria-hidden="true" />
         <span className="sidenav__label">Апарати</span>
       </NavLink>
       <NavLink to="/compressors" className={cls} title="Компресори">
-        <Cog size={24} aria-hidden="true" />
+        <img src={Compressor} width={44} height={44} alt="" aria-hidden="true" />
         <span className="sidenav__label">Компресори</span>
       </NavLink>
       {isAdmin && (
@@ -48,6 +70,12 @@ export function SideNav() {
         <NavLink to="/admin/stations" className={cls} title="Станції">
           <Building2 size={24} aria-hidden="true" />
           <span className="sidenav__label">Станції</span>
+        </NavLink>
+      )}
+      {canEdit && (
+        <NavLink to="/archive" className={cls} title="Архів">
+          <img src={Archive1} width={44} height={44} alt="" aria-hidden="true" />
+          <span className="sidenav__label">Архів</span>
         </NavLink>
       )}
       <div className="sidenav__footer">v0.1</div>

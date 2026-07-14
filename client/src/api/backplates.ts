@@ -81,3 +81,12 @@ export function useRestoreBackplate(id: string) {
     onSuccess: invalidate,
   });
 }
+
+/** Справжнє видалення з бази — лише для ложаментів без історії використання (MVP). */
+export function useDeleteBackplate(id: string) {
+  const invalidate = useInvalidateBackplates();
+  return useMutation({
+    mutationFn: () => api<void>(`/backplates/${id}`, { method: 'DELETE' }),
+    onSuccess: invalidate,
+  });
+}

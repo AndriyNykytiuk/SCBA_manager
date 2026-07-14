@@ -1,7 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { HeaderBar } from './HeaderBar';
 import { SideNav } from './SideNav';
-import { BottomTabBar } from './BottomTabBar';
 import { ConnectionBanner } from './ConnectionBanner';
 import { ActiveFillSessionBanner } from './ActiveFillSessionBanner';
 import { StationPickInline } from './StationSwitcherSheet';
@@ -20,7 +19,6 @@ export function AppShell() {
         <ActiveFillSessionBanner />
         {needStation ? <StationPickInline /> : <Outlet />}
       </main>
-      <BottomTabBar />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { ArrowLeft, Cylinder as CylinderIcon, Droplets } from 'lucide-react';
 import {
   useArchiveCylinder,
   useCylinder,
+  useDeleteCylinder,
   useHydroTests,
   useRestoreCylinder,
   useSetHydroOverride,
@@ -31,10 +32,12 @@ export function CylinderDetailPage() {
   const tests = useHydroTests(id);
   const archiveMut = useArchiveCylinder(id ?? '');
   const restoreMut = useRestoreCylinder(id ?? '');
+  const deleteMut = useDeleteCylinder(id ?? '');
   const overrideMut = useSetHydroOverride(id ?? '');
 
   const [hydroOpen, setHydroOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideDate, setOverrideDate] = useState('');
 
@@ -56,6 +59,19 @@ export function CylinderDetailPage() {
       onError: (err) => {
         toast.show(errorMessage(err), 'error');
         setArchiveOpen(false);
+      },
+    });
+  };
+
+  const doDelete = () => {
+    deleteMut.mutate(undefined, {
+      onSuccess: () => {
+        toast.show(`Балон №${c.number} видалено`);
+        navigate('/cylinders');
+      },
+      onError: (err) => {
+        toast.show(errorMessage(err), 'error');
+        setDeleteOpen(false);
       },
     });
   };
@@ -203,6 +219,11 @@ export function CylinderDetailPage() {
               Відновити
             </Button>
           )}
+          {!c.installation && (
+            <Button variant="danger" onClick={() => setDeleteOpen(true)}>
+              Видалити
+            </Button>
+          )}
         </div>
       )}
 
@@ -220,6 +241,24 @@ export function CylinderDetailPage() {
           <p>
             Балон буде переміщено в архів зі збереженням історії. Якщо балон стоїть в апараті —
             спочатку зніміть його.
+          </p>
+        </ConfirmDialog>
+      )}
+
+      {deleteOpen && (
+        <ConfirmDialog
+          title={`Видалити балон №${c.number}?`}
+          confirmLabel="Видалити назавжди"
+          danger
+          loading={deleteMut.isPending}
+          onConfirm={doDelete}
+          onCancel={() => setDeleteOpen(false)}
+        >
+          <p>
+            Запис буде видалено з бази без можливості відновлення
+            {archived
+              ? ' — разом з усією історією гідротестів та установок в апарати.'
+              : '. Дозволено лише для балонів без історії використання — якщо балон вже встановлювався в апарат чи брав участь у заправці, спершу спишіть його.'}
           </p>
         </ConfirmDialog>
       )}

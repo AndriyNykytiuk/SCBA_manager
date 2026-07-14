@@ -22,6 +22,8 @@ import { UsersPage } from './pages/admin/UsersPage';
 import { UserFormPage } from './pages/admin/UserFormPage';
 import { StationsPage } from './pages/admin/StationsPage';
 import { StationFormPage } from './pages/admin/StationFormPage';
+import { ArchiveListPage } from './pages/archive/ArchiveListPage';
+import { ArchiveDetailPage } from './pages/archive/ArchiveDetailPage';
 
 export function App() {
   return (
@@ -115,6 +117,23 @@ export function App() {
           element={
             <RequireRole roles={['admin']}>
               <StationFormPage />
+            </RequireRole>
+          }
+        />
+
+        <Route
+          path="archive"
+          element={
+            <RequireRole roles={['admin', 'master']}>
+              <ArchiveListPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="archive/:id"
+          element={
+            <RequireRole roles={['admin', 'master']}>
+              <ArchiveDetailPage />
             </RequireRole>
           }
         />

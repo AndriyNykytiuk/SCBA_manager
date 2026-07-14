@@ -4,6 +4,7 @@ import { ArrowLeft, Backpack, Gauge } from 'lucide-react';
 import {
   useArchiveBackplate,
   useBackplate,
+  useDeleteBackplate,
   useRestoreBackplate,
   useUpdateBackplate,
 } from '../../api/backplates';
@@ -29,10 +30,12 @@ export function BackplateDetailPage() {
   const updateMut = useUpdateBackplate(id ?? '');
   const archiveMut = useArchiveBackplate(id ?? '');
   const restoreMut = useRestoreBackplate(id ?? '');
+  const deleteMut = useDeleteBackplate(id ?? '');
 
   const [reducerOpen, setReducerOpen] = useState(false);
   const [reducerDate, setReducerDate] = useState(todayISO());
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   if (query.isLoading) return <div className="page"><SkeletonRows count={4} /></div>;
   if (query.isError || !query.data) {
@@ -55,6 +58,19 @@ export function BackplateDetailPage() {
         onError: (err) => toast.show(errorMessage(err), 'error'),
       },
     );
+  };
+
+  const doDelete = () => {
+    deleteMut.mutate(undefined, {
+      onSuccess: () => {
+        toast.show(`Ложамент ${b.name} видалено`);
+        navigate('/backplates');
+      },
+      onError: (err) => {
+        toast.show(errorMessage(err), 'error');
+        setDeleteOpen(false);
+      },
+    });
   };
 
   const changeStatus = (status: 'free' | 'in_repair') => {
@@ -189,6 +205,11 @@ export function BackplateDetailPage() {
               Відновити
             </Button>
           )}
+          {!inApparatus && (
+            <Button variant="danger" onClick={() => setDeleteOpen(true)}>
+              Видалити
+            </Button>
+          )}
         </div>
       )}
 
@@ -249,6 +270,24 @@ export function BackplateDetailPage() {
           onCancel={() => setArchiveOpen(false)}
         >
           <p>Ложамент буде переміщено в архів зі збереженням історії.</p>
+        </ConfirmDialog>
+      )}
+
+      {deleteOpen && (
+        <ConfirmDialog
+          title={`Видалити ложамент ${b.name}?`}
+          confirmLabel="Видалити назавжди"
+          danger
+          loading={deleteMut.isPending}
+          onConfirm={doDelete}
+          onCancel={() => setDeleteOpen(false)}
+        >
+          <p>
+            Запис буде видалено з бази без можливості відновлення
+            {archived
+              ? ' — разом з апаратами, що коли-небудь на ньому базувались, та їхньою історією (самі балони не постраждають).'
+              : '. Дозволено лише для ложаментів без історії використання — якщо ложамент вже входив до складу апарата, спершу спишіть його.'}
+          </p>
         </ConfirmDialog>
       )}
     </div>

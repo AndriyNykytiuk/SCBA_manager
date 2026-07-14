@@ -1,16 +1,29 @@
-/* SCBA Manager — дизайн-токени (джерело: docs/design/design-system.md v1.0) */
+/* SCBA Manager — дизайн-токени (джерело: docs/design/design-system.md v1.1)
+   Кольорова гама навмисно перегукується з рятувальним спорядженням Dräger/Bauer:
+   --color-brand — глибокий інженерний синій (компресори Bauer), фон header/sidenav (--color-nav-bg);
+   --color-accent — сигнальний золотий (Dräger), текст/іконки на ТЕМНОМУ chrome (header, sidenav,
+   ink-панелі) — на світлих (білих) поверхнях золотий текст НЕ використовується, контраст не
+   проходить WCAG (там --color-accent лишається лише фоном під темний текст або декором).
+   Статусні кольори (2.2) залишені без змін — вони безпеко-критичні (overdue/warning/ok)
+   і не підлягають ребрендингу. */
 :root {
   /* 2.1 Базова палітра */
   --color-text-primary: #101828;
   --color-text-secondary: #475467;
   --color-text-inverse: #ffffff;
-  --color-bg-page: #f8fafc;
+  --color-bg-page: #f7f7f5;
   --color-bg-surface: #ffffff;
-  --color-border: #d0d5dd;
-  --color-brand: #1d4ed8;
-  --color-brand-hover: #1e40af;
-  --color-brand-bg: #eff4ff;
-  --color-focus-ring: #1d4ed8;
+  --color-border: #cbd1d6;
+  --color-brand: #005a9e;
+  --color-brand-hover: #00437a;
+  --color-brand-bg: #e7f1fa;
+  --color-focus-ring: #005a9e;
+
+  /* Сигнальний золотий (Dräger): текст/іконки на темному chrome (header, sidenav, ink-панелі) */
+  --color-accent: #ffd700;
+  --color-accent-hover: #e0b700;
+  --color-ink: #14181f;
+  --color-nav-bg: #185a9e;
 
   /* 2.2 Статусні кольори: bg / fg / accent */
   --status-danger-bg: #fef3f2;
@@ -59,6 +72,6 @@
   --radius-lg: 16px;
   --shadow-card: 0 1px 3px rgba(16, 24, 40, 0.1);
 
-  /* Типографіка */
-  --font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Типографіка: IBM Plex Sans — інженерний, технічний шрифт (self-hosted, @fontsource) */
+  --font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }

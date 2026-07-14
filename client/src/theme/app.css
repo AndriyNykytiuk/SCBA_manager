@@ -94,19 +94,17 @@ a {
 
 @media (max-width: 767px) {
   .shell {
-    grid-template-rows: 56px 1fr auto;
+    grid-template-rows: 56px 1fr;
     grid-template-columns: 1fr;
     grid-template-areas:
       'header'
-      'main'
-      'tabbar';
+      'main';
   }
-  .shell__sidenav {
-    display: none;
-  }
+  /* .shell__sidenav display:none живе в секції SideNav нижче (після .sidenav{display:flex}) —
+     інакше однакова специфічність двох класів на одному елементі програє за порядком у файлі. */
   .shell__main {
     padding: var(--space-4);
-    padding-bottom: var(--space-6);
+    padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
   }
 }
 
@@ -116,8 +114,9 @@ a {
   align-items: center;
   gap: var(--space-4);
   padding: 0 var(--space-4);
-  background: var(--color-bg-surface);
-  border-bottom: 1px solid var(--color-border);
+  background: var(--color-nav-bg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 -3px 0 var(--color-accent);
 }
 
 .header__brand {
@@ -126,7 +125,12 @@ a {
   gap: var(--space-2);
   font-weight: 700;
   font-size: 18px;
+  color: var(--color-accent);
   white-space: nowrap;
+}
+
+.header .btn--ghost {
+  color: var(--color-accent);
 }
 
 .header__spacer {
@@ -139,12 +143,11 @@ a {
   gap: var(--space-2);
   min-height: var(--touch-min);
   padding: 0 var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-surface);
+
+
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--color-accent);
 }
 
 .header__role-badge {
@@ -170,8 +173,8 @@ a {
 .sidenav {
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-surface);
-  border-right: 1px solid var(--color-border);
+  background: var(--color-nav-bg);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
   padding: var(--space-3) var(--space-2);
   gap: var(--space-1);
 }
@@ -185,21 +188,25 @@ a {
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-text-secondary);
+  color: var(--color-accent);
   font-size: 16px;
   font-weight: 600;
   text-decoration: none;
   position: relative;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .sidenav__item:hover {
-  background: var(--status-neutral-bg);
+  background: rgba(255, 215, 0, 0.12);
+  box-shadow: 0 0 16px rgba(255, 215, 0, 0.35);
 }
 
 .sidenav__item.active {
-  background: var(--color-brand-bg);
-  color: var(--color-brand);
-  box-shadow: inset 4px 0 0 var(--color-brand);
+  background: rgba(255, 215, 0, 0.16);
+  color: var(--color-accent);
+  box-shadow:
+    inset 4px 0 0 var(--color-accent),
+    0 0 16px rgba(255, 215, 0, 0.3);
 }
 
 .sidenav__count {
@@ -220,7 +227,7 @@ a {
 .sidenav__footer {
   margin-top: auto;
   padding: var(--space-3);
-  color: var(--color-text-secondary);
+  color: rgba(255, 255, 255, 0.4);
   font-size: 14px;
 }
 
@@ -242,76 +249,9 @@ a {
   }
 }
 
-/* ===== Bottom tab bar (mobile) ===== */
-.tabbar {
-  display: none;
-}
-
 @media (max-width: 767px) {
-  .tabbar {
-    grid-area: tabbar;
-    display: flex;
-    background: var(--color-bg-surface);
-    border-top: 1px solid var(--color-border);
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-  .tabbar__item {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    min-height: 64px;
-    border: none;
-    background: transparent;
-    color: var(--color-text-secondary);
-    font-size: 12px;
-    font-weight: 600;
-    text-decoration: none;
-    position: relative;
-  }
-  .tabbar__item.active {
-    color: var(--color-brand);
-  }
-  .tabbar__cta {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    background: transparent;
-  }
-  .tabbar__cta-circle {
-    width: 64px;
-    height: 64px;
-    margin-top: -20px;
-    border-radius: 50%;
-    background: var(--color-brand);
-    color: #fff;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    box-shadow: var(--shadow-card);
-    font-size: 10px;
-    font-weight: 700;
-  }
-  .tabbar__count {
-    position: absolute;
-    top: 4px;
-    right: calc(50% - 24px);
-    min-width: 20px;
-    height: 20px;
-    padding: 0 5px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    background: var(--status-danger-solid);
-    color: #fff;
-    font-size: 12px;
-    font-weight: 700;
+  .shell__sidenav {
+    display: none;
   }
 }
 
@@ -1217,7 +1157,8 @@ textarea.input {
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: var(--space-8);
+  padding: 0 var(--space-8) var(--space-8);
+  overflow: hidden;
 }
 
 .login-card__logo {
@@ -1226,14 +1167,19 @@ textarea.input {
   align-items: center;
   gap: var(--space-2);
   text-align: center;
+  margin: 0 calc(-1 * var(--space-8));
+  padding: var(--space-8) var(--space-8) var(--space-6);
+  background: var(--color-ink);
+  border-bottom: 4px solid var(--color-accent);
 }
 
 .login-card__logo h1 {
   font-size: 24px;
+  color: var(--color-text-inverse);
 }
 
 .login-card__subtitle {
-  color: var(--color-text-secondary);
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .password-wrap {
@@ -1388,4 +1334,20 @@ textarea.input {
 
 .more-list .list-row {
   border-radius: 0;
+}
+
+/* ===== Утиліти видимості за брейкпоінтом (<768px = мобільний, screens.md §1.3) =====
+   Навмисно в самому кінці файлу: клас display завжди повинен перемагати каскад
+   компонента (напр. .btn{display:inline-flex}), незалежно від порядку класів у JSX. */
+.show-mobile {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .show-mobile {
+    display: inline-flex;
+  }
+  .hide-mobile {
+    display: none;
+  }
 }
