@@ -16,7 +16,9 @@ services:
     plan: free
     region: frankfurt
     rootDir: server
-    buildCommand: npm ci && npm run build
+    # --include=dev: NODE_ENV=production (нижче) інакше змушує npm пропустити
+    # devDependencies (typescript, @types/*) — і tsc падає з TS7016 на кожному імпорті.
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
