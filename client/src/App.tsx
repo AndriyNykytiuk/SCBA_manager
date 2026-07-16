@@ -10,6 +10,9 @@ import { BackplateFormPage } from './pages/backplates/BackplateFormPage';
 import { CylinderListPage } from './pages/cylinders/CylinderListPage';
 import { CylinderDetailPage } from './pages/cylinders/CylinderDetailPage';
 import { CylinderFormPage } from './pages/cylinders/CylinderFormPage';
+import { MaskListPage } from './pages/masks/MaskListPage';
+import { MaskDetailPage } from './pages/masks/MaskDetailPage';
+import { MaskFormPage } from './pages/masks/MaskFormPage';
 import { ApparatusListPage } from './pages/apparatus/ApparatusListPage';
 import { ApparatusDetailPage } from './pages/apparatus/ApparatusDetailPage';
 import { ApparatusFormPage } from './pages/apparatus/ApparatusFormPage';
@@ -22,6 +25,7 @@ import { UsersPage } from './pages/admin/UsersPage';
 import { UserFormPage } from './pages/admin/UserFormPage';
 import { StationsPage } from './pages/admin/StationsPage';
 import { StationFormPage } from './pages/admin/StationFormPage';
+import { IntervalsPage } from './pages/admin/IntervalsPage';
 import { ArchiveListPage } from './pages/archive/ArchiveListPage';
 import { ArchiveDetailPage } from './pages/archive/ArchiveDetailPage';
 
@@ -49,6 +53,11 @@ export function App() {
         <Route path="cylinders/new" element={<CylinderFormPage />} />
         <Route path="cylinders/:id" element={<CylinderDetailPage />} />
         <Route path="cylinders/:id/edit" element={<CylinderFormPage />} />
+
+        <Route path="masks" element={<MaskListPage />} />
+        <Route path="masks/new" element={<MaskFormPage />} />
+        <Route path="masks/:id" element={<MaskDetailPage />} />
+        <Route path="masks/:id/edit" element={<MaskFormPage />} />
 
         <Route path="apparatus" element={<ApparatusListPage />} />
         <Route path="apparatus/new" element={<ApparatusFormPage />} />
@@ -117,6 +126,15 @@ export function App() {
           element={
             <RequireRole roles={['admin']}>
               <StationFormPage />
+            </RequireRole>
+          }
+        />
+
+        <Route
+          path="admin/intervals"
+          element={
+            <RequireRole roles={['admin']}>
+              <IntervalsPage />
             </RequireRole>
           }
         />

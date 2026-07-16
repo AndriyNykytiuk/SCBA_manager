@@ -1,16 +1,22 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
-import { useBackplate, useCreateBackplate, useUpdateBackplate } from '../../api/backplates';
+import { ArrowLeft, Backpack } from 'lucide-react';
+import {
+  useBackplate,
+  useBulkCreateBackplates,
+  useCreateBackplate,
+  useUpdateBackplate,
+} from '../../api/backplates';
 import { useAuth } from '../../auth/AuthContext';
 import { Button } from '../../components/Button';
 import { DateInput, Field, TextArea, TextInput } from '../../components/Field';
+import { ListRow } from '../../components/ListRow';
 import { NumberStepper } from '../../components/NumberStepper';
 import { ErrorState, SkeletonRows } from '../../components/states';
 import { useToast } from '../../components/Toast';
 import { errorMessage, fieldErrors } from '../../api/http';
-import { addMonths, formatDate } from '../../lib/formatters';
+import type { Backplate } from '../../api/types';
 
 export function BackplateFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -20,15 +26,20 @@ export function BackplateFormPage() {
   const toast = useToast();
   const existing = useBackplate(isEdit ? id : undefined);
   const createMut = useCreateBackplate();
+  const bulkCreateMut = useBulkCreateBackplates();
   const updateMut = useUpdateBackplate(id ?? '');
 
+  const [createdBatch, setCreatedBatch] = useState<Backplate[] | null>(null);
+  const [quantity, setQuantity] = useState<number | null>(1);
   const [name, setName] = useState('');
   const [manufacturer, setManufacturer] = useState('');
   const [model, setModel] = useState('');
   const [serial, setSerial] = useState('');
+  const [lungValveNumber, setLungValveNumber] = useState('');
+  const [membraneReplacedAt, setMembraneReplacedAt] = useState('');
+  const [gaugeNumber, setGaugeNumber] = useState('');
   const [commissionedAt, setCommissionedAt] = useState('');
   const [reducerReplacedAt, setReducerReplacedAt] = useState('');
-  const [intervalMonths, setIntervalMonths] = useState<number | null>(12);
   const [notes, setNotes] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -39,9 +50,11 @@ export function BackplateFormPage() {
       setManufacturer(b.manufacturer ?? '');
       setModel(b.model ?? '');
       setSerial(b.serial_number ?? '');
+      setLungValveNumber(b.lung_valve_number ?? '');
+      setMembraneReplacedAt(b.membrane_replaced_at ?? '');
+      setGaugeNumber(b.gauge_number ?? '');
       setCommissionedAt(b.commissioned_at ?? '');
       setReducerReplacedAt(b.reducer_last_replaced_at ?? '');
-      setIntervalMonths(b.reducer_interval_months);
       setNotes(b.notes ?? '');
     }
   }, [isEdit, existing.data]);
@@ -52,16 +65,40 @@ export function BackplateFormPage() {
     return <div className="page"><ErrorState onRetry={() => existing.refetch()} /></div>;
   }
 
-  const preview =
-    reducerReplacedAt && intervalMonths ? addMonths(reducerReplacedAt, intervalMonths) : '';
+  if (createdBatch) {
+    return (
+      <div className="page">
+        <div className="page-header">
+          <h1>Створено {createdBatch.length} ложаментів</h1>
+        </div>
+        <p className="field__hint">
+          Назви згенеровано автоматично — відкрийте будь-який ложамент, щоб змінити назву чи інші поля.
+        </p>
+        <div className="list">
+          {createdBatch.map((b) => (
+            <ListRow key={b.id} icon={<Backpack size={24} />} title={b.name} to={`/backplates/${b.id}/edit`} />
+          ))}
+        </div>
+        <div className="form__footer">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setCreatedBatch(null);
+              setName('');
+            }}
+          >
+            Створити ще
+          </Button>
+          <Button onClick={() => navigate('/backplates')}>Готово</Button>
+        </div>
+      </div>
+    );
+  }
 
   const submit = (ev: FormEvent) => {
     ev.preventDefault();
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = 'Вкажіть назву/номер (напр. bS-4343234)';
-    if (!intervalMonths || intervalMonths <= 0) {
-      e.reducer_interval_months = 'Інтервал має бути > 0';
-    }
     setErrors(e);
     if (Object.keys(e).length > 0) return;
 
@@ -70,9 +107,11 @@ export function BackplateFormPage() {
       manufacturer: manufacturer.trim() || null,
       model: model.trim() || null,
       serial_number: serial.trim() || null,
+      lung_valve_number: lungValveNumber.trim() || null,
+      membrane_replaced_at: membraneReplacedAt || null,
+      gauge_number: gaugeNumber.trim() || null,
       commissioned_at: commissionedAt || null,
       reducer_last_replaced_at: reducerReplacedAt || null,
-      reducer_interval_months: intervalMonths ?? 0,
       notes: notes.trim() || null,
     };
 
@@ -90,6 +129,17 @@ export function BackplateFormPage() {
         },
         onError,
       });
+    } else if (quantity && quantity > 1) {
+      bulkCreateMut.mutate(
+        { ...body, quantity },
+        {
+          onSuccess: (res) => {
+            toast.show(`Створено ${res.data.length} ложаментів`);
+            setCreatedBatch(res.data);
+          },
+          onError,
+        },
+      );
     } else {
       createMut.mutate(body, {
         onSuccess: (b) => {
@@ -101,7 +151,11 @@ export function BackplateFormPage() {
     }
   };
 
-  const pending = createMut.isPending || updateMut.isPending;
+  const pending = createMut.isPending || updateMut.isPending || bulkCreateMut.isPending;
+  const previewNames =
+    !isEdit && quantity && quantity > 1 && name.trim()
+      ? Array.from({ length: Math.min(quantity, 5) }, (_, i) => `${name.trim()}-${i + 1}`)
+      : [];
 
   return (
     <div className="page">
@@ -114,7 +168,30 @@ export function BackplateFormPage() {
       </div>
 
       <form className="form" onSubmit={submit} noValidate>
-        <Field label="Назва / номер" required error={errors.name} hint="Формат на кшталт bS-4343234">
+        {!isEdit && (
+          <Field
+            label="Кількість"
+            hint={
+              previewNames.length > 0 ? (
+                <>
+                  Назви: <strong>{previewNames.join(', ')}</strong>
+                  {quantity! > 5 ? `… (${quantity} шт)` : ''}
+                </>
+              ) : (
+                'Створити декілька однакових ложаментів одразу (назви — з суфіксом -1, -2…)'
+              )
+            }
+          >
+            <NumberStepper value={quantity} onChange={setQuantity} step={1} min={1} max={50} ariaLabel="Кількість" />
+          </Field>
+        )}
+
+        <Field
+          label={quantity && quantity > 1 ? 'Базова назва / номер' : 'Назва / номер'}
+          required
+          error={errors.name}
+          hint="Формат на кшталт bS-4343234"
+        >
           <TextInput
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -134,6 +211,18 @@ export function BackplateFormPage() {
           <TextInput value={serial} onChange={(e) => setSerial(e.target.value)} />
         </Field>
 
+        <Field label="Номер легеневого автомату">
+          <TextInput value={lungValveNumber} onChange={(e) => setLungValveNumber(e.target.value)} />
+        </Field>
+
+        <Field label="Дата заміни мембрани">
+          <DateInput value={membraneReplacedAt} onChange={(e) => setMembraneReplacedAt(e.target.value)} />
+        </Field>
+
+        <Field label="Номер манометру">
+          <TextInput value={gaugeNumber} onChange={(e) => setGaugeNumber(e.target.value)} />
+        </Field>
+
         <Field label="Дата введення в експлуатацію">
           <DateInput value={commissionedAt} onChange={(e) => setCommissionedAt(e.target.value)} />
         </Field>
@@ -142,28 +231,6 @@ export function BackplateFormPage() {
           <DateInput
             value={reducerReplacedAt}
             onChange={(e) => setReducerReplacedAt(e.target.value)}
-          />
-        </Field>
-
-        <Field
-          label="Інтервал заміни редуктора, місяців"
-          required
-          error={errors.reducer_interval_months}
-          hint={
-            preview ? (
-              <>
-                Наступна заміна: <strong>{formatDate(preview)}</strong>
-              </>
-            ) : undefined
-          }
-        >
-          <NumberStepper
-            value={intervalMonths}
-            onChange={setIntervalMonths}
-            step={1}
-            min={0}
-            ariaLabel="Інтервал заміни редуктора"
-            invalid={Boolean(errors.reducer_interval_months)}
           />
         </Field>
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Archive as ArchiveIcon, Backpack, Cylinder as CylinderIcon } from 'lucide-react';
+import { Archive as ArchiveIcon, Backpack, Cylinder as CylinderIcon, VenetianMask } from 'lucide-react';
 import { useArchiveList } from '../../api/archive';
 import type { ArchiveListFilters } from '../../api/archive';
 import { ListRow } from '../../components/ListRow';
@@ -12,10 +12,11 @@ const CHIPS = [
   { key: 'all', label: 'Всі' },
   { key: 'cylinder', label: 'Балони' },
   { key: 'backplate', label: 'Ложаменти' },
+  { key: 'mask', label: 'Маски' },
 ];
 
 function chipToFilters(chip: string): ArchiveListFilters {
-  if (chip === 'cylinder' || chip === 'backplate') return { entity_type: chip };
+  if (chip === 'cylinder' || chip === 'backplate' || chip === 'mask') return { entity_type: chip };
   return {};
 }
 
@@ -34,7 +35,7 @@ export function ArchiveListPage() {
         <h1>Архів видалених{query.data ? ` (${query.data.meta.total})` : ''}</h1>
       </div>
       <p className="field__hint">
-        Тут зберігається повна історія балонів і ложаментів, видалених з активного обліку.
+        Тут зберігається повна історія балонів, ложаментів і масок, видалених з активного обліку.
       </p>
 
       <SearchInput value={q} onChange={setQ} placeholder="Пошук за номером чи назвою" />
@@ -56,6 +57,8 @@ export function ArchiveListPage() {
               icon={
                 entry.entity_type === 'cylinder' ? (
                   <CylinderIcon size={24} />
+                ) : entry.entity_type === 'mask' ? (
+                  <VenetianMask size={24} />
                 ) : (
                   <Backpack size={24} />
                 )

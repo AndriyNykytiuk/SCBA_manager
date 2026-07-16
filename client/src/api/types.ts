@@ -93,10 +93,16 @@ export interface Backplate {
   manufacturer: string | null;
   model: string | null;
   serial_number: string | null;
+  lung_valve_number: string | null;
+  gauge_number: string | null;
   commissioned_at: string | null;
   reducer_last_replaced_at: string | null;
   reducer_interval_months: number;
   next_reducer_replacement_at: string | null;
+  membrane_replaced_at: string | null;
+  /** Встановлює лише admin (PATCH з цим полем повертає 403 для master). */
+  membrane_interval_months: number | null;
+  next_membrane_replacement_at: string | null;
   status: BackplateStatus;
   condition: Condition;
   apparatus: { id: string; name: string } | null;
@@ -111,15 +117,49 @@ export interface BackplateCreateBody {
   manufacturer?: string | null;
   model?: string | null;
   serial_number?: string | null;
+  lung_valve_number?: string | null;
+  gauge_number?: string | null;
   commissioned_at?: string | null;
   reducer_last_replaced_at?: string | null;
-  reducer_interval_months: number;
+  membrane_replaced_at?: string | null;
   notes?: string | null;
 }
 
 export type BackplatePatchBody = Partial<BackplateCreateBody> & {
   status?: 'free' | 'in_repair';
 };
+
+// ===== Masks (маски) =====
+export interface Mask {
+  id: string;
+  station_id: string;
+  number: string;
+  model: string | null;
+  assigned_to: string | null;
+  inhale_valve_replaced_at: string | null;
+  next_inhale_valve_at: string | null;
+  voice_membrane_replaced_at: string | null;
+  next_voice_membrane_at: string | null;
+  inspection_at: string | null;
+  next_inspection_at: string | null;
+  condition: Condition;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+export interface MaskCreateBody {
+  number: string;
+  model?: string | null;
+  assigned_to?: string | null;
+  inhale_valve_replaced_at?: string | null;
+  voice_membrane_replaced_at?: string | null;
+  inspection_at?: string | null;
+  notes?: string | null;
+}
+
+export type MaskPatchBody = Partial<MaskCreateBody>;
 
 // ===== Cylinders (балони) =====
 export type CylinderMaterial = 'metal' | 'composite';
@@ -154,7 +194,6 @@ export interface CylinderCreateBody {
   manufacturer?: string | null;
   manufactured_at: string;
   end_of_life_at: string;
-  hydro_interval_months: number;
   last_hydro_test_at: string;
   notes?: string | null;
 }
@@ -163,7 +202,6 @@ export interface CylinderPatchBody {
   number?: string;
   working_pressure_bar?: number;
   end_of_life_at?: string;
-  hydro_interval_months?: number;
   notes?: string | null;
 }
 
@@ -191,6 +229,7 @@ export interface ApparatusCylinderSlot {
     number: string;
     volume_l?: number;
     material?: CylinderMaterial;
+    next_hydro_test_at: string | null;
     condition: Condition;
   };
   installed_at: string;
@@ -200,7 +239,14 @@ export interface Apparatus {
   id: string;
   station_id: string;
   name: string;
-  backplate: { id: string; name: string; model: string | null; condition: Condition };
+  backplate: {
+    id: string;
+    name: string;
+    model: string | null;
+    lung_valve_number: string | null;
+    gauge_number: string | null;
+    condition: Condition;
+  };
   cylinders: ApparatusCylinderSlot[];
   cylinders_installed: number;
   condition: Condition;
@@ -353,7 +399,7 @@ export interface FillSessionStopResponse {
 }
 
 // ===== Dashboard =====
-export type AlertEntityType = 'apparatus' | 'cylinder' | 'backplate' | 'compressor';
+export type AlertEntityType = 'apparatus' | 'cylinder' | 'backplate' | 'mask' | 'compressor';
 
 export interface DashboardAlertItem {
   entity_type: AlertEntityType;
@@ -374,8 +420,8 @@ export interface DashboardAlerts {
   data: DashboardAlertItem[];
 }
 
-// ===== Archive (справжнє видалення балонів/ложаментів, MVP) =====
-export type ArchiveEntityType = 'cylinder' | 'backplate';
+// ===== Archive (справжнє видалення балонів/ложаментів/масок, MVP) =====
+export type ArchiveEntityType = 'cylinder' | 'backplate' | 'mask';
 
 export interface ArchiveEntry {
   id: string;
@@ -444,6 +490,27 @@ export interface ArchivedBackplateSnapshot {
   apparatuses: ArchivedApparatus[];
 }
 
+export interface ArchivedMaskSnapshot {
+  mask: Mask;
+}
+
 export interface ArchiveDetail extends ArchiveEntry {
-  snapshot: ArchivedCylinderSnapshot | ArchivedBackplateSnapshot;
+  snapshot: ArchivedCylinderSnapshot | ArchivedBackplateSnapshot | ArchivedMaskSnapshot;
+}
+
+// ===== Інтервали випробувань (глобальні, admin-only) =====
+export type IntervalKey =
+  | 'hydro_metal'
+  | 'hydro_composite'
+  | 'reducer'
+  | 'membrane'
+  | 'mask_inhale_valve'
+  | 'mask_voice_membrane'
+  | 'mask_inspection';
+
+export interface IntervalSetting {
+  key: IntervalKey;
+  label: string;
+  months: number;
+  updated_at: string;
 }

@@ -9,12 +9,14 @@ import {
   Archive,
   Backpack,
   Building2,
+  Clock,
   Cog,
   Cylinder,
   Fuel,
   Home,
   Package,
   Users,
+  VenetianMask,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { useAlertCounters } from '../api/dashboard';
@@ -52,6 +54,10 @@ export function SideNav() {
         <img src={Baloon} width={44} height={44} alt="" aria-hidden="true" />
         <span className="sidenav__label">Балони</span>
       </NavLink>
+      <NavLink to="/masks" className={cls} title="Маски">
+        <VenetianMask size={24} aria-hidden="true" />
+        <span className="sidenav__label">Маски</span>
+      </NavLink>
       <NavLink to="/apparatus" className={cls} title="Апарати">
         <img src={scba} width={44} height={44} alt="" aria-hidden="true" />
         <span className="sidenav__label">Апарати</span>
@@ -70,6 +76,12 @@ export function SideNav() {
         <NavLink to="/admin/stations" className={cls} title="Станції">
           <Building2 size={24} aria-hidden="true" />
           <span className="sidenav__label">Станції</span>
+        </NavLink>
+      )}
+      {isAdmin && (
+        <NavLink to="/admin/intervals" className={cls} title="Інтервали випробувань">
+          <Clock size={24} aria-hidden="true" />
+          <span className="sidenav__label">Інтервали випробувань</span>
         </NavLink>
       )}
       {canEdit && (

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Backpack, Gauge } from 'lucide-react';
+import { ArrowLeft, Backpack, Disc, Gauge } from 'lucide-react';
 import {
   useArchiveBackplate,
   useBackplate,
@@ -34,6 +34,8 @@ export function BackplateDetailPage() {
 
   const [reducerOpen, setReducerOpen] = useState(false);
   const [reducerDate, setReducerDate] = useState(todayISO());
+  const [membraneOpen, setMembraneOpen] = useState(false);
+  const [membraneDate, setMembraneDate] = useState(todayISO());
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -54,6 +56,19 @@ export function BackplateDetailPage() {
         onSuccess: () => {
           toast.show('Заміну редуктора зафіксовано');
           setReducerOpen(false);
+        },
+        onError: (err) => toast.show(errorMessage(err), 'error'),
+      },
+    );
+  };
+
+  const saveMembrane = () => {
+    updateMut.mutate(
+      { membrane_replaced_at: membraneDate },
+      {
+        onSuccess: () => {
+          toast.show('Заміну мембрани зафіксовано');
+          setMembraneOpen(false);
         },
         onError: (err) => toast.show(errorMessage(err), 'error'),
       },
@@ -127,6 +142,34 @@ export function BackplateDetailPage() {
       </div>
 
       <div className="card">
+        <div className="card__title">
+          <Disc size={18} aria-hidden="true" style={{ verticalAlign: '-3px' }} /> Мембрана
+        </div>
+        <dl className="kv">
+          <dt>Остання заміна</dt>
+          <dd className="tnum">{formatDate(b.membrane_replaced_at)}</dd>
+        </dl>
+        <dl className="kv">
+          <dt>Наступна перевірка</dt>
+          <dd className="tnum">{formatDate(b.next_membrane_replacement_at)}</dd>
+        </dl>
+        <dl className="kv">
+          <dt>Інтервал</dt>
+          <dd>{b.membrane_interval_months ? `${b.membrane_interval_months} міс` : 'не налаштовано'}</dd>
+        </dl>
+        {canEdit && !archived && (
+          <Button
+            onClick={() => {
+              setMembraneDate(todayISO());
+              setMembraneOpen(true);
+            }}
+          >
+            Зафіксувати заміну мембрани
+          </Button>
+        )}
+      </div>
+
+      <div className="card">
         <div className="card__title">Дані</div>
         <dl className="kv">
           <dt>Виробник / модель</dt>
@@ -135,6 +178,14 @@ export function BackplateDetailPage() {
         <dl className="kv">
           <dt>Серійний номер</dt>
           <dd>{b.serial_number ?? '—'}</dd>
+        </dl>
+        <dl className="kv">
+          <dt>Номер легеневого автомату</dt>
+          <dd>{b.lung_valve_number ?? '—'}</dd>
+        </dl>
+        <dl className="kv">
+          <dt>Номер манометру</dt>
+          <dd>{b.gauge_number ?? '—'}</dd>
         </dl>
         <dl className="kv">
           <dt>Введено в експлуатацію</dt>
@@ -244,6 +295,44 @@ export function BackplateDetailPage() {
               value={reducerDate}
               max={todayISO()}
               onChange={(e) => setReducerDate(e.target.value)}
+            />
+          </Field>
+        </Modal>
+      )}
+
+      {membraneOpen && (
+        <Modal
+          title="Зафіксувати заміну мембрани"
+          onClose={() => setMembraneOpen(false)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setMembraneOpen(false)}>
+                Скасувати
+              </Button>
+              <Button onClick={saveMembrane} loading={updateMut.isPending} disabled={!membraneDate}>
+                Зберегти
+              </Button>
+            </>
+          }
+        >
+          <Field
+            label="Дата заміни"
+            required
+            hint={
+              membraneDate && b.membrane_interval_months ? (
+                <>
+                  Наступна перевірка:{' '}
+                  <strong>{formatDate(addMonths(membraneDate, b.membrane_interval_months))}</strong>
+                </>
+              ) : !b.membrane_interval_months ? (
+                'Інтервал перевірки ще не налаштований адміністратором'
+              ) : undefined
+            }
+          >
+            <DateInput
+              value={membraneDate}
+              max={todayISO()}
+              onChange={(e) => setMembraneDate(e.target.value)}
             />
           </Field>
         </Modal>

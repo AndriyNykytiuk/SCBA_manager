@@ -8,6 +8,7 @@ import {
   OctagonAlert,
   Package,
   TriangleAlert,
+  VenetianMask,
 } from 'lucide-react';
 import { useDashboardAlerts } from '../api/dashboard';
 import { CounterChip } from '../components/CounterChip';
@@ -22,6 +23,7 @@ const ENTITY_ROUTE: Record<AlertEntityType, string> = {
   apparatus: '/apparatus',
   cylinder: '/cylinders',
   backplate: '/backplates',
+  mask: '/masks',
   compressor: '/compressors',
 };
 
@@ -29,6 +31,7 @@ const ENTITY_ICON: Record<AlertEntityType, typeof Package> = {
   apparatus: Package,
   cylinder: Cylinder,
   backplate: Backpack,
+  mask: VenetianMask,
   compressor: Cog,
 };
 

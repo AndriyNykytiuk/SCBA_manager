@@ -16,6 +16,7 @@ import type {
   Condition,
   ConditionStatus,
   Cylinder,
+  Mask,
 } from '../api/types';
 
 export type UiStatus = 'danger' | 'warning' | 'ok' | 'neutral' | 'archived';
@@ -65,6 +66,11 @@ export function backplateBadge(b: Backplate): BadgeProps {
 export function cylinderBadge(c: Cylinder): BadgeProps {
   if (c.archived_at) return { status: 'archived', label: 'Списаний' };
   return conditionBadge(c.condition);
+}
+
+export function maskBadge(m: Mask): BadgeProps {
+  if (m.archived_at) return { status: 'archived', label: 'Списана' };
+  return conditionBadge(m.condition);
 }
 
 export function apparatusBadge(a: Apparatus): BadgeProps {

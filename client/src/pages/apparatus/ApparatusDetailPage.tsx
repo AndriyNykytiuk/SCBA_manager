@@ -97,7 +97,15 @@ export function ApparatusDetailPage() {
             status={backplateBadgeProps.status}
             icon={<Backpack size={24} />}
             title={`Ложамент ${a.backplate.name}`}
-            meta={a.backplate.model ?? undefined}
+            meta={
+              [
+                a.backplate.model,
+                a.backplate.lung_valve_number ? `ЛА ${a.backplate.lung_valve_number}` : null,
+                a.backplate.gauge_number ? `Манометр ${a.backplate.gauge_number}` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ') || undefined
+            }
             badge={<StatusBadge status={backplateBadgeProps.status} label={backplateBadgeProps.label} />}
             to={`/backplates/${a.backplate.id}`}
           />
@@ -111,7 +119,7 @@ export function ApparatusDetailPage() {
                 status={cylBadge.status}
                 icon={<CylinderIcon size={24} />}
                 title={`Балон №${slot.cylinder.number}`}
-                meta={`позиція ${position} · встановлено ${formatDate(slot.installed_at)}`}
+                meta={`позиція ${position} · встановлено ${formatDate(slot.installed_at)} · гідротест до ${formatDate(slot.cylinder.next_hydro_test_at)}`}
                 badge={<StatusBadge status={cylBadge.status} label={cylBadge.label} />}
                 to={`/cylinders/${slot.cylinder.id}`}
                 trailing={

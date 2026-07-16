@@ -1,18 +1,23 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
-import { useCreateCylinder, useCylinder, useUpdateCylinder } from '../../api/cylinders';
+import { ArrowLeft, Cylinder as CylinderIcon } from 'lucide-react';
+import {
+  useBulkCreateCylinders,
+  useCreateCylinder,
+  useCylinder,
+  useUpdateCylinder,
+} from '../../api/cylinders';
 import { useAuth } from '../../auth/AuthContext';
 import { Button } from '../../components/Button';
 import { DateInput, Field, TextArea, TextInput } from '../../components/Field';
+import { ListRow } from '../../components/ListRow';
 import { NumberStepper } from '../../components/NumberStepper';
 import { SegmentControl } from '../../components/SegmentControl';
 import { ErrorState, SkeletonRows } from '../../components/states';
 import { useToast } from '../../components/Toast';
 import { errorMessage, fieldErrors } from '../../api/http';
-import { addMonths, formatDate } from '../../lib/formatters';
-import type { CylinderMaterial } from '../../api/types';
+import type { Cylinder, CylinderMaterial } from '../../api/types';
 
 export function CylinderFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -22,8 +27,11 @@ export function CylinderFormPage() {
   const toast = useToast();
   const existing = useCylinder(isEdit ? id : undefined);
   const createMut = useCreateCylinder();
+  const bulkCreateMut = useBulkCreateCylinders();
   const updateMut = useUpdateCylinder(id ?? '');
 
+  const [createdBatch, setCreatedBatch] = useState<Cylinder[] | null>(null);
+  const [quantity, setQuantity] = useState<number | null>(1);
   const [number, setNumber] = useState('');
   const [volume, setVolume] = useState<number | null>(6.8);
   const [material, setMaterial] = useState<CylinderMaterial | null>(null);
@@ -32,7 +40,6 @@ export function CylinderFormPage() {
   const [manufacturedAt, setManufacturedAt] = useState('');
   const [endOfLifeAt, setEndOfLifeAt] = useState('');
   const [lastHydroAt, setLastHydroAt] = useState('');
-  const [intervalMonths, setIntervalMonths] = useState<number | null>(60);
   const [notes, setNotes] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -47,7 +54,6 @@ export function CylinderFormPage() {
       setManufacturedAt(c.manufactured_at);
       setEndOfLifeAt(c.end_of_life_at);
       setLastHydroAt(c.last_hydro_test_at ?? '');
-      setIntervalMonths(c.hydro_interval_months);
       setNotes(c.notes ?? '');
     }
   }, [isEdit, existing.data]);
@@ -58,8 +64,40 @@ export function CylinderFormPage() {
     return <div className="page"><ErrorState onRetry={() => existing.refetch()} /></div>;
   }
 
-  const hydroPreview =
-    lastHydroAt && intervalMonths ? addMonths(lastHydroAt, intervalMonths) : '';
+  if (createdBatch) {
+    return (
+      <div className="page">
+        <div className="page-header">
+          <h1>Створено {createdBatch.length} балонів</h1>
+        </div>
+        <p className="field__hint">
+          Номери згенеровано автоматично — відкрийте будь-який балон, щоб змінити номер чи інші поля.
+        </p>
+        <div className="list">
+          {createdBatch.map((c) => (
+            <ListRow
+              key={c.id}
+              icon={<CylinderIcon size={24} />}
+              title={`№${c.number}`}
+              to={`/cylinders/${c.id}/edit`}
+            />
+          ))}
+        </div>
+        <div className="form__footer">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setCreatedBatch(null);
+              setNumber('');
+            }}
+          >
+            Створити ще
+          </Button>
+          <Button onClick={() => navigate('/cylinders')}>Готово</Button>
+        </div>
+      </div>
+    );
+  }
 
   const validate = (): boolean => {
     const e: Record<string, string> = {};
@@ -74,7 +112,6 @@ export function CylinderFormPage() {
       e.end_of_life_at = 'Кінець строку служби має бути пізніше дати виготовлення';
     }
     if (!pressure || pressure <= 0 || pressure > 450) e.working_pressure_bar = 'Тиск: 1–450 бар';
-    if (!intervalMonths || intervalMonths <= 0) e.hydro_interval_months = 'Інтервал має бути > 0';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -96,7 +133,6 @@ export function CylinderFormPage() {
           number: number.trim(),
           working_pressure_bar: pressure ?? 0,
           end_of_life_at: endOfLifeAt,
-          hydro_interval_months: intervalMonths ?? 0,
           notes: notes.trim() || null,
         },
         {
@@ -108,31 +144,45 @@ export function CylinderFormPage() {
         },
       );
     } else {
-      createMut.mutate(
-        {
-          number: number.trim(),
-          volume_l: volume ?? 6.8,
-          material: material as CylinderMaterial,
-          working_pressure_bar: pressure ?? 0,
-          manufacturer: manufacturer.trim() || null,
-          manufactured_at: manufacturedAt,
-          end_of_life_at: endOfLifeAt,
-          hydro_interval_months: intervalMonths ?? 0,
-          last_hydro_test_at: lastHydroAt,
-          notes: notes.trim() || null,
-        },
-        {
+      const payload = {
+        number: number.trim(),
+        volume_l: volume ?? 6.8,
+        material: material as CylinderMaterial,
+        working_pressure_bar: pressure ?? 0,
+        manufacturer: manufacturer.trim() || null,
+        manufactured_at: manufacturedAt,
+        end_of_life_at: endOfLifeAt,
+        last_hydro_test_at: lastHydroAt,
+        notes: notes.trim() || null,
+      };
+      if (quantity && quantity > 1) {
+        bulkCreateMut.mutate(
+          { ...payload, quantity },
+          {
+            onSuccess: (res) => {
+              toast.show(`Створено ${res.data.length} балонів`);
+              setCreatedBatch(res.data);
+            },
+            onError,
+          },
+        );
+      } else {
+        createMut.mutate(payload, {
           onSuccess: (c) => {
             toast.show(`Балон №${c.number} створено`);
             navigate(`/cylinders/${c.id}`);
           },
           onError,
-        },
-      );
+        });
+      }
     }
   };
 
-  const pending = createMut.isPending || updateMut.isPending;
+  const pending = createMut.isPending || updateMut.isPending || bulkCreateMut.isPending;
+  const previewNumbers =
+    !isEdit && quantity && quantity > 1 && number.trim()
+      ? Array.from({ length: Math.min(quantity, 5) }, (_, i) => `${number.trim()}-${i + 1}`)
+      : [];
 
   return (
     <div className="page">
@@ -145,7 +195,29 @@ export function CylinderFormPage() {
       </div>
 
       <form className="form" onSubmit={submit} noValidate>
-        <Field label="Номер балона" required error={errors.number}>
+        {!isEdit && (
+          <Field
+            label="Кількість"
+            hint={
+              previewNumbers.length > 0 ? (
+                <>
+                  Номери: <strong>{previewNumbers.join(', ')}</strong>
+                  {quantity! > 5 ? `… (${quantity} шт)` : ''}
+                </>
+              ) : (
+                'Створити декілька однакових балонів одразу (номери — з суфіксом -1, -2…)'
+              )
+            }
+          >
+            <NumberStepper value={quantity} onChange={setQuantity} step={1} min={1} max={50} ariaLabel="Кількість" />
+          </Field>
+        )}
+
+        <Field
+          label={quantity && quantity > 1 ? 'Базовий номер балона' : 'Номер балона'}
+          required
+          error={errors.number}
+        >
           <TextInput
             value={number}
             onChange={(e) => setNumber(e.target.value)}
@@ -227,28 +299,6 @@ export function CylinderFormPage() {
             onChange={(e) => setLastHydroAt(e.target.value)}
             invalid={Boolean(errors.last_hydro_test_at)}
             disabled={isEdit}
-          />
-        </Field>
-
-        <Field
-          label="Інтервал гідротесту, місяців"
-          required
-          error={errors.hydro_interval_months}
-          hint={
-            hydroPreview ? (
-              <>
-                Наступний гідротест: <strong>{formatDate(hydroPreview)}</strong>
-              </>
-            ) : undefined
-          }
-        >
-          <NumberStepper
-            value={intervalMonths}
-            onChange={setIntervalMonths}
-            step={12}
-            min={0}
-            ariaLabel="Інтервал гідротесту"
-            invalid={Boolean(errors.hydro_interval_months)}
           />
         </Field>
 

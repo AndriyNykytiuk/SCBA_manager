@@ -1,18 +1,32 @@
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Backpack, Cylinder as CylinderIcon, Droplets, Wind } from 'lucide-react';
+import {
+  ArrowLeft,
+  Backpack,
+  Cylinder as CylinderIcon,
+  Droplets,
+  VenetianMask,
+  Wind,
+} from 'lucide-react';
 import { useArchiveDetail } from '../../api/archive';
 import type {
   ArchivedBackplateSnapshot,
   ArchivedCylinderSnapshot,
+  ArchivedMaskSnapshot,
 } from '../../api/types';
 import { HistoryTimeline } from '../../components/HistoryTimeline';
+import { StatusBadge } from '../../components/StatusBadge';
 import { ErrorState, SkeletonRows } from '../../components/states';
+import { conditionBadge } from '../../lib/status';
 import { formatDate, formatDateTime, MATERIAL_LABEL } from '../../lib/formatters';
 
-function isCylinderSnapshot(
-  s: ArchivedCylinderSnapshot | ArchivedBackplateSnapshot,
-): s is ArchivedCylinderSnapshot {
+type Snapshot = ArchivedCylinderSnapshot | ArchivedBackplateSnapshot | ArchivedMaskSnapshot;
+
+function isCylinderSnapshot(s: Snapshot): s is ArchivedCylinderSnapshot {
   return 'cylinder' in s;
+}
+
+function isMaskSnapshot(s: Snapshot): s is ArchivedMaskSnapshot {
+  return 'mask' in s;
 }
 
 export function ArchiveDetailPage() {
@@ -38,6 +52,8 @@ export function ArchiveDetailPage() {
         <span className="detail-head__title">
           {entry.entity_type === 'cylinder' ? (
             <CylinderIcon size={28} aria-hidden="true" />
+          ) : entry.entity_type === 'mask' ? (
+            <VenetianMask size={28} aria-hidden="true" />
           ) : (
             <Backpack size={28} aria-hidden="true" />
           )}
@@ -60,6 +76,8 @@ export function ArchiveDetailPage() {
 
       {isCylinderSnapshot(snapshot) ? (
         <CylinderSnapshotView snapshot={snapshot} />
+      ) : isMaskSnapshot(snapshot) ? (
+        <MaskSnapshotView snapshot={snapshot} />
       ) : (
         <BackplateSnapshotView snapshot={snapshot} />
       )}
@@ -167,6 +185,14 @@ function BackplateSnapshotView({ snapshot }: { snapshot: ArchivedBackplateSnapsh
           <dd>{b.serial_number ?? '—'}</dd>
         </dl>
         <dl className="kv">
+          <dt>Номер легеневого автомату</dt>
+          <dd>{b.lung_valve_number ?? '—'}</dd>
+        </dl>
+        <dl className="kv">
+          <dt>Номер манометру</dt>
+          <dd>{b.gauge_number ?? '—'}</dd>
+        </dl>
+        <dl className="kv">
           <dt>Введено в експлуатацію</dt>
           <dd className="tnum">{formatDate(b.commissioned_at)}</dd>
         </dl>
@@ -236,5 +262,47 @@ function BackplateSnapshotView({ snapshot }: { snapshot: ArchivedBackplateSnapsh
         </div>
       ))}
     </>
+  );
+}
+
+function MaskSnapshotView({ snapshot }: { snapshot: ArchivedMaskSnapshot }) {
+  const m = snapshot.mask;
+  const badge = conditionBadge(m.condition);
+  return (
+    <div className="card">
+      <div className="card__title">Дані на момент видалення</div>
+      <dl className="kv">
+        <dt>Модель</dt>
+        <dd>{m.model ?? '—'}</dd>
+      </dl>
+      <dl className="kv">
+        <dt>Закріплена особа</dt>
+        <dd>{m.assigned_to ?? '—'}</dd>
+      </dl>
+      <dl className="kv">
+        <dt>Заміна клапану вдиху</dt>
+        <dd className="tnum">{formatDate(m.inhale_valve_replaced_at)}</dd>
+      </dl>
+      <dl className="kv">
+        <dt>Заміна переговорної мембрани</dt>
+        <dd className="tnum">{formatDate(m.voice_membrane_replaced_at)}</dd>
+      </dl>
+      <dl className="kv">
+        <dt>Технічний огляд</dt>
+        <dd className="tnum">{formatDate(m.inspection_at)}</dd>
+      </dl>
+      <dl className="kv">
+        <dt>Стан на момент видалення</dt>
+        <dd>
+          <StatusBadge status={badge.status} label={badge.label} />
+        </dd>
+      </dl>
+      {m.notes && (
+        <dl className="kv">
+          <dt>Примітки</dt>
+          <dd>{m.notes}</dd>
+        </dl>
+      )}
+    </div>
   );
 }

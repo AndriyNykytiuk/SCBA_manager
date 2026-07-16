@@ -74,6 +74,17 @@ export function useCreateCylinder() {
   });
 }
 
+/** Масове створення: number — базовий номер, реальні номери — <база>-1..<база>-N. */
+export function useBulkCreateCylinders() {
+  const invalidate = useInvalidateCylinders();
+  const { stationParam } = useAuth();
+  return useMutation({
+    mutationFn: (body: CylinderCreateBody & { quantity: number }) =>
+      api<ListResponse<Cylinder>>('/cylinders/bulk', { method: 'POST', body, query: stationParam }),
+    onSuccess: invalidate,
+  });
+}
+
 export function useUpdateCylinder(id: string) {
   const invalidate = useInvalidateCylinders();
   return useMutation({

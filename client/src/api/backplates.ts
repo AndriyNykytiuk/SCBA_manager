@@ -57,6 +57,17 @@ export function useCreateBackplate() {
   });
 }
 
+/** Масове створення: name — базова назва, реальні назви — <база>-1..<база>-N. */
+export function useBulkCreateBackplates() {
+  const invalidate = useInvalidateBackplates();
+  const { stationParam } = useAuth();
+  return useMutation({
+    mutationFn: (body: BackplateCreateBody & { quantity: number }) =>
+      api<ListResponse<Backplate>>('/backplates/bulk', { method: 'POST', body, query: stationParam }),
+    onSuccess: invalidate,
+  });
+}
+
 export function useUpdateBackplate(id: string) {
   const invalidate = useInvalidateBackplates();
   return useMutation({
