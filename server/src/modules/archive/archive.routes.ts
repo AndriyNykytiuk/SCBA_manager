@@ -20,7 +20,7 @@ const listSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   q: z.string().trim().min(1).optional(),
-  entity_type: z.enum(['cylinder', 'backplate']).optional(),
+  entity_type: z.enum(['cylinder', 'backplate', 'mask']).optional(),
 });
 
 archiveRouter.get(

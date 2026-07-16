@@ -13,9 +13,12 @@ import {
 export const APPARATUS_CARD_SELECT = `
   SELECT a.id, a.station_id, a.notes, a.created_at, a.updated_at, a.archived_at,
          bp.id AS bp_id, bp.name AS bp_name, bp.model AS bp_model,
+         bp.lung_valve_number AS bp_lung_valve_number, bp.gauge_number AS bp_gauge_number,
          bps.status AS bp_condition_status,
          to_char(bps.next_reducer_replacement_at, 'YYYY-MM-DD') AS bp_next_at,
          (bps.next_reducer_replacement_at - current_date)::int  AS bp_days_left,
+         to_char(bps.next_membrane_replacement_at, 'YYYY-MM-DD') AS bp_membrane_next_at,
+         (bps.next_membrane_replacement_at - current_date)::int  AS bp_membrane_days_left,
          COALESCE(vas.cylinders_installed, 0)::int AS cylinders_installed,
          vas.status AS condition_status,
          sl.id AS sl_id, sl.name AS sl_name
@@ -33,6 +36,7 @@ export interface ApparatusCylinderRow {
   number: string;
   volume_l: number;
   material: string;
+  next_hydro_test_at: string | null;
   condition: Condition;
 }
 
@@ -66,6 +70,7 @@ export async function fetchApparatusCylinders(
       number: r.number,
       volume_l: r.volume_l,
       material: r.material,
+      next_hydro_test_at: r.next_hydro_test_at,
       condition: cylinderCondition({
         status: r.condition_status,
         nextHydroTestAt: r.next_hydro_test_at,
@@ -83,7 +88,9 @@ export function serializeApparatus(row: any, cylinders: ApparatusCylinderRow[]) 
   const bpCondition = backplateCondition({
     status: row.bp_condition_status,
     nextReducerReplacementAt: row.bp_next_at,
-    daysLeft: row.bp_days_left,
+    reducerDaysLeft: row.bp_days_left,
+    nextMembraneReplacementAt: row.bp_membrane_next_at,
+    membraneDaysLeft: row.bp_membrane_days_left,
   });
   const condition = apparatusCondition({
     status: row.condition_status,
@@ -98,6 +105,8 @@ export function serializeApparatus(row: any, cylinders: ApparatusCylinderRow[]) 
       id: row.bp_id,
       name: row.bp_name,
       model: row.bp_model,
+      lung_valve_number: row.bp_lung_valve_number,
+      gauge_number: row.bp_gauge_number,
       condition: bpCondition,
     },
     cylinders: cylinders.map((c) => ({
@@ -107,6 +116,7 @@ export function serializeApparatus(row: any, cylinders: ApparatusCylinderRow[]) 
         number: c.number,
         volume_l: c.volume_l,
         material: c.material,
+        next_hydro_test_at: c.next_hydro_test_at,
         condition: c.condition,
       },
       installed_at: c.installed_at,

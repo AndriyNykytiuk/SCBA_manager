@@ -51,21 +51,79 @@ export function cylinderCondition(input: {
   return { status, reason, due_at: input.endOfLifeAt };
 }
 
-/** Ложамент: заміна редуктора (поріг 60 дн, DB-1). */
+/**
+ * Ложамент: два незалежні компоненти техобслуговування — редуктор і мембрана
+ * (поріг warning = 60 дн, DB-1). Причина статусу — той, що «гірший» (менше днів у запасі),
+ * той самий принцип, що й cylinderCondition (гідротест vs строк служби).
+ */
 export function backplateCondition(input: {
   status: ConditionStatus | null;
   nextReducerReplacementAt: string | null;
-  daysLeft: number | null;
+  reducerDaysLeft: number | null;
+  nextMembraneReplacementAt: string | null;
+  membraneDaysLeft: number | null;
 }): Condition {
   const status = input.status ?? 'ok';
-  if (status === 'ok' || input.daysLeft === null) {
-    return { status, reason: null, due_at: input.nextReducerReplacementAt };
+  if (status === 'ok') {
+    const dueCandidates = [input.nextReducerReplacementAt, input.nextMembraneReplacementAt].filter(
+      (d): d is string => d !== null,
+    );
+    dueCandidates.sort();
+    return { status, reason: null, due_at: dueCandidates[0] ?? null };
+  }
+  const reducer = input.reducerDaysLeft;
+  const membrane = input.membraneDaysLeft;
+  const reducerWins = reducer !== null && (membrane === null || reducer <= membrane);
+  if (reducerWins) {
+    const reason =
+      status === 'overdue'
+        ? `Заміна редуктора прострочена ${Math.abs(reducer!)} дн`
+        : `Заміна редуктора через ${reducer} дн`;
+    return { status, reason, due_at: input.nextReducerReplacementAt };
   }
   const reason =
     status === 'overdue'
-      ? `Заміна редуктора прострочена ${Math.abs(input.daysLeft)} дн`
-      : `Заміна редуктора через ${input.daysLeft} дн`;
-  return { status, reason, due_at: input.nextReducerReplacementAt };
+      ? `Заміна мембрани прострочена ${Math.abs(membrane!)} дн`
+      : `Заміна мембрани через ${membrane} дн`;
+  return { status, reason, due_at: input.nextMembraneReplacementAt };
+}
+
+/**
+ * Маска: три незалежні компоненти техобслуговування — клапан вдиху, переговорна мембрана,
+ * технічний огляд (поріг warning = 60 дн, як у ложамента). Причина — «винний» компонент
+ * (найменше днів у запасі).
+ */
+export function maskCondition(input: {
+  status: ConditionStatus | null;
+  nextInhaleValveAt: string | null;
+  inhaleValveDaysLeft: number | null;
+  nextVoiceMembraneAt: string | null;
+  voiceMembraneDaysLeft: number | null;
+  nextInspectionAt: string | null;
+  inspectionDaysLeft: number | null;
+}): Condition {
+  const status = input.status ?? 'ok';
+  const items = [
+    { label: 'Заміна клапану вдиху', daysLeft: input.inhaleValveDaysLeft, dueAt: input.nextInhaleValveAt },
+    {
+      label: 'Заміна переговорної мембрани',
+      daysLeft: input.voiceMembraneDaysLeft,
+      dueAt: input.nextVoiceMembraneAt,
+    },
+    { label: 'Технічний огляд', daysLeft: input.inspectionDaysLeft, dueAt: input.nextInspectionAt },
+  ];
+  if (status === 'ok') {
+    const dueCandidates = items.map((i) => i.dueAt).filter((d): d is string => d !== null);
+    dueCandidates.sort();
+    return { status, reason: null, due_at: dueCandidates[0] ?? null };
+  }
+  const known = items.filter((i): i is typeof i & { daysLeft: number } => i.daysLeft !== null);
+  const worst = known.reduce((a, b) => (b.daysLeft < a.daysLeft ? b : a));
+  const reason =
+    status === 'overdue'
+      ? `${worst.label} прострочено ${Math.abs(worst.daysLeft)} дн`
+      : `${worst.label} через ${worst.daysLeft} дн`;
+  return { status, reason, due_at: worst.dueAt };
 }
 
 export interface MaintenanceLevelRow {

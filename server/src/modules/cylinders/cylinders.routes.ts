@@ -22,36 +22,45 @@ cylindersRouter.use(authenticate);
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Очікується дата YYYY-MM-DD');
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
-const createSchema = z
-  .object({
-    number: z.string().trim().min(1),
-    volume_l: z.union([z.literal(6), z.literal(6.8), z.literal(7)]),
-    material: z.enum(['metal', 'composite']),
-    working_pressure_bar: z.number().int().min(1).max(450),
-    manufacturer: z.string().trim().min(1).nullish(),
-    manufactured_at: dateStr,
-    end_of_life_at: dateStr,
-    hydro_interval_months: z.number().int().positive(),
-    last_hydro_test_at: dateStr, // обовʼязково → перший рядок hydro_test (схема §3.5)
-    notes: z.string().trim().min(1).nullish(),
-    station_id: z.string().uuid().optional(), // admin
-  })
-  .superRefine((v, ctx) => {
-    if (v.end_of_life_at <= v.manufactured_at) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['end_of_life_at'],
-        message: 'Кінець строку служби має бути пізніше дати виготовлення',
-      });
-    }
-    if (v.last_hydro_test_at > todayIso()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['last_hydro_test_at'],
-        message: 'Дата гідротесту не може бути в майбутньому',
-      });
-    }
-  });
+const cylinderBaseFields = {
+  number: z.string().trim().min(1),
+  volume_l: z.union([z.literal(6), z.literal(6.8), z.literal(7)]),
+  material: z.enum(['metal', 'composite']),
+  working_pressure_bar: z.number().int().min(1).max(450),
+  manufacturer: z.string().trim().min(1).nullish(),
+  manufactured_at: dateStr,
+  end_of_life_at: dateStr,
+  last_hydro_test_at: dateStr, // обовʼязково → перший рядок hydro_test (схема §3.5)
+  notes: z.string().trim().min(1).nullish(),
+  station_id: z.string().uuid().optional(), // admin
+};
+
+function refineCylinderDates(
+  v: { end_of_life_at: string; manufactured_at: string; last_hydro_test_at: string },
+  ctx: z.RefinementCtx,
+): void {
+  if (v.end_of_life_at <= v.manufactured_at) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['end_of_life_at'],
+      message: 'Кінець строку служби має бути пізніше дати виготовлення',
+    });
+  }
+  if (v.last_hydro_test_at > todayIso()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['last_hydro_test_at'],
+      message: 'Дата гідротесту не може бути в майбутньому',
+    });
+  }
+}
+
+const createSchema = z.object(cylinderBaseFields).superRefine(refineCylinderDates);
+
+/** Масове створення: number — базовий номер, реальні номери — <база>-1..<база>-N. */
+const bulkCreateSchema = z
+  .object({ ...cylinderBaseFields, quantity: z.number().int().min(2).max(50) })
+  .superRefine(refineCylinderDates);
 
 const patchSchema = z
   .object({
@@ -62,7 +71,6 @@ const patchSchema = z
     manufacturer: z.string().trim().min(1).nullable().optional(),
     manufactured_at: dateStr.optional(),
     end_of_life_at: dateStr.optional(),
-    hydro_interval_months: z.number().int().positive().optional(),
     notes: z.string().trim().min(1).nullable().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'Порожній PATCH' });
@@ -91,7 +99,7 @@ const CARD_SELECT = `
          cy.working_pressure_bar, cy.manufacturer,
          to_char(cy.manufactured_at, 'YYYY-MM-DD')           AS manufactured_at,
          to_char(cy.end_of_life_at, 'YYYY-MM-DD')            AS end_of_life_at,
-         cy.hydro_interval_months,
+         hi.months AS hydro_interval_months,
          to_char(cy.next_hydro_test_override, 'YYYY-MM-DD')  AS next_hydro_test_override,
          cy.notes, cy.created_at, cy.updated_at, cy.archived_at,
          to_char(cs.last_hydro_test_at, 'YYYY-MM-DD')        AS last_hydro_test_at,
@@ -101,6 +109,7 @@ const CARD_SELECT = `
          cs.status AS condition_status,
          ac.apparatus_id, ac.position, bp.name AS apparatus_name
     FROM cylinder cy
+    JOIN interval_setting hi ON hi.key = 'hydro_' || cy.material
     LEFT JOIN v_cylinder_status cs ON cs.cylinder_id = cy.id
     LEFT JOIN apparatus_cylinder ac ON ac.cylinder_id = cy.id AND ac.removed_at IS NULL
     LEFT JOIN apparatus a ON a.id = ac.apparatus_id AND a.archived_at IS NULL
@@ -290,8 +299,8 @@ cylindersRouter.post(
     const id = await withTransaction(async (client) => {
       const { rows } = await client.query(
         `INSERT INTO cylinder (station_id, number, volume_l, material, working_pressure_bar,
-                               manufacturer, manufactured_at, end_of_life_at, hydro_interval_months, notes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+                               manufacturer, manufactured_at, end_of_life_at, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
         [
           stationId,
           body.number,
@@ -301,7 +310,6 @@ cylindersRouter.post(
           body.manufacturer ?? null,
           body.manufactured_at,
           body.end_of_life_at,
-          body.hydro_interval_months,
           body.notes ?? null,
         ],
       );
@@ -324,6 +332,69 @@ cylindersRouter.post(
       return cylinderId;
     });
     res.status(201).json(serialize(await getCardOr404(id)));
+  }),
+);
+
+/** Масове створення: quantity балонів з номерами <база>-1..<база>-N, решта полів спільні. */
+cylindersRouter.post(
+  '/bulk',
+  requireRole('master', 'admin'),
+  asyncHandler(async (req, res) => {
+    const body = parse(bulkCreateSchema, req.body);
+    const stationId = resolveWriteStation(req, body.station_id ?? null);
+    const numbers = Array.from({ length: body.quantity }, (_, i) => `${body.number}-${i + 1}`);
+    const { rows: taken } = await pool.query(
+      `SELECT number FROM cylinder
+        WHERE station_id = $1 AND lower(number) = ANY($2::text[]) AND archived_at IS NULL`,
+      [stationId, numbers.map((n) => n.toLowerCase())],
+    );
+    if (taken.length > 0) {
+      throw errors.duplicateName(
+        `Номери вже зайняті: ${taken.map((r) => r.number).join(', ')} — змініть базовий номер`,
+      );
+    }
+    const ids = await withTransaction(async (client) => {
+      const createdIds: string[] = [];
+      for (const number of numbers) {
+        const { rows } = await client.query(
+          `INSERT INTO cylinder (station_id, number, volume_l, material, working_pressure_bar,
+                                 manufacturer, manufactured_at, end_of_life_at, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+          [
+            stationId,
+            number,
+            body.volume_l,
+            body.material,
+            body.working_pressure_bar,
+            body.manufacturer ?? null,
+            body.manufactured_at,
+            body.end_of_life_at,
+            body.notes ?? null,
+          ],
+        );
+        const cylinderId = rows[0].id as string;
+        await client.query(
+          `INSERT INTO hydro_test (cylinder_id, tested_at, performed_by, notes, created_by)
+           VALUES ($1, $2, NULL, 'Внесено при заведенні балона', $3)`,
+          [cylinderId, body.last_hydro_test_at, req.user!.id],
+        );
+        await writeAudit(client, {
+          userId: req.user!.id,
+          stationId,
+          entityType: 'cylinder',
+          entityId: cylinderId,
+          action: 'create',
+          changes: { number: { old: null, new: number } },
+          requestId: req.requestId,
+        });
+        createdIds.push(cylinderId);
+      }
+      return createdIds;
+    });
+    const cards = await Promise.all(ids.map((cid) => getCardOr404(cid)));
+    res.status(201).json(
+      listEnvelope(cards.map(serialize), { page: 1, limit: ids.length, total: ids.length }),
+    );
   }),
 );
 
@@ -363,7 +434,6 @@ cylindersRouter.patch(
       'manufacturer',
       'manufactured_at',
       'end_of_life_at',
-      'hydro_interval_months',
       'notes',
     ] as const) {
       if (body[key] !== undefined) fields[key] = body[key];

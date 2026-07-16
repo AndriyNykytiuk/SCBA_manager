@@ -11,6 +11,8 @@ import { compressorsRouter } from './modules/compressors/compressors.routes';
 import { cylindersRouter } from './modules/cylinders/cylinders.routes';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes';
 import { fillSessionsRouter } from './modules/fillSessions/fillSessions.routes';
+import { intervalsRouter } from './modules/intervals/intervals.routes';
+import { masksRouter } from './modules/masks/masks.routes';
 import { stationsRouter } from './modules/stations/stations.routes';
 import { storageLocationsRouter } from './modules/storageLocations/storageLocations.routes';
 import { usersRouter } from './modules/users/users.routes';
@@ -41,12 +43,14 @@ api.use('/stations', stationsRouter);
 api.use('/users', usersRouter);
 api.use('/storage-locations', storageLocationsRouter);
 api.use('/backplates', backplatesRouter);
+api.use('/masks', masksRouter);
 api.use('/cylinders', cylindersRouter);
 api.use('/apparatus', apparatusRouter);
 api.use('/compressors', compressorsRouter);
 api.use('/fill-sessions', fillSessionsRouter);
 api.use('/dashboard', dashboardRouter);
 api.use('/archive', archiveRouter);
+api.use('/intervals', intervalsRouter);
 app.use('/api/v1', api);
 
 // 404 у форматі помилок контракту (§1.4) + errorHandler останнім

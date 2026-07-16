@@ -4,6 +4,7 @@ import {
   backplateCondition,
   compressorCondition,
   cylinderCondition,
+  maskCondition,
   round1,
   worstStatus,
   type Condition,
@@ -12,7 +13,7 @@ import {
 } from '../../shared/status';
 
 export interface AlertItem {
-  entity_type: 'apparatus' | 'cylinder' | 'backplate' | 'compressor';
+  entity_type: 'apparatus' | 'cylinder' | 'backplate' | 'mask' | 'compressor';
   entity_id: string;
   title: string;
   subtitle: string;
@@ -93,6 +94,8 @@ export async function getStationAlerts(stationId: string): Promise<StationAlerts
     `SELECT b.id, b.name, bps.status,
             to_char(bps.next_reducer_replacement_at, 'YYYY-MM-DD') AS next_at,
             (bps.next_reducer_replacement_at - current_date)::int  AS days_left,
+            to_char(bps.next_membrane_replacement_at, 'YYYY-MM-DD') AS membrane_next_at,
+            (bps.next_membrane_replacement_at - current_date)::int  AS membrane_days_left,
             (a.id IS NOT NULL) AS in_apparatus
        FROM backplate b
        JOIN v_backplate_status bps ON bps.backplate_id = b.id
@@ -104,26 +107,73 @@ export async function getStationAlerts(stationId: string): Promise<StationAlerts
     const cond = backplateCondition({
       status: r.status,
       nextReducerReplacementAt: r.next_at,
-      daysLeft: r.days_left,
+      reducerDaysLeft: r.days_left,
+      nextMembraneReplacementAt: r.membrane_next_at,
+      membraneDaysLeft: r.membrane_days_left,
     });
     count(cond.status);
     if (cond.status === 'ok') continue;
     const where = r.in_apparatus ? `в апараті ${r.name}` : 'вільний';
+    const daysLeft = Math.min(
+      r.days_left ?? Number.MAX_SAFE_INTEGER,
+      r.membrane_days_left ?? Number.MAX_SAFE_INTEGER,
+    );
     items.push({
       entity_type: 'backplate',
       entity_id: r.id,
       title: r.name,
       subtitle: `ложамент · ${where}`,
       status: cond.status,
-      reason:
-        cond.status === 'overdue'
-          ? `Редуктор прострочено ${Math.abs(r.days_left)} дн`
-          : `Редуктор через ${r.days_left} дн`,
+      reason: cond.reason,
       due_at: cond.due_at,
-      ...(cond.status === 'overdue'
-        ? { overdue_days: Math.abs(r.days_left) }
-        : { days_left: r.days_left }),
-      sortKey: r.days_left,
+      ...(cond.status === 'overdue' ? { overdue_days: Math.abs(daysLeft) } : { days_left: daysLeft }),
+      sortKey: daysLeft,
+    });
+  }
+
+  // --- Маски ---
+  const masks = await pool.query(
+    `SELECT m.id, m.number, vs.status,
+            to_char(vs.next_inhale_valve_at, 'YYYY-MM-DD')   AS iv_next_at,
+            (vs.next_inhale_valve_at - current_date)::int    AS iv_days_left,
+            to_char(vs.next_voice_membrane_at, 'YYYY-MM-DD') AS vm_next_at,
+            (vs.next_voice_membrane_at - current_date)::int  AS vm_days_left,
+            to_char(vs.next_inspection_at, 'YYYY-MM-DD')     AS ins_next_at,
+            (vs.next_inspection_at - current_date)::int      AS ins_days_left,
+            m.assigned_to
+       FROM mask m
+       JOIN v_mask_status vs ON vs.mask_id = m.id
+      WHERE m.station_id = $1`,
+    [stationId],
+  );
+  for (const r of masks.rows) {
+    const cond = maskCondition({
+      status: r.status,
+      nextInhaleValveAt: r.iv_next_at,
+      inhaleValveDaysLeft: r.iv_days_left,
+      nextVoiceMembraneAt: r.vm_next_at,
+      voiceMembraneDaysLeft: r.vm_days_left,
+      nextInspectionAt: r.ins_next_at,
+      inspectionDaysLeft: r.ins_days_left,
+    });
+    count(cond.status);
+    if (cond.status === 'ok') continue;
+    const where = r.assigned_to ? `закріплена за ${r.assigned_to}` : 'не закріплена';
+    const daysLeft = Math.min(
+      r.iv_days_left ?? Number.MAX_SAFE_INTEGER,
+      r.vm_days_left ?? Number.MAX_SAFE_INTEGER,
+      r.ins_days_left ?? Number.MAX_SAFE_INTEGER,
+    );
+    items.push({
+      entity_type: 'mask',
+      entity_id: r.id,
+      title: `Маска №${r.number}`,
+      subtitle: `маска · ${where}`,
+      status: cond.status,
+      reason: cond.reason,
+      due_at: cond.due_at,
+      ...(cond.status === 'overdue' ? { overdue_days: Math.abs(daysLeft) } : { days_left: daysLeft }),
+      sortKey: daysLeft,
     });
   }
 
@@ -132,7 +182,9 @@ export async function getStationAlerts(stationId: string): Promise<StationAlerts
     `SELECT a.id, bp.name, vas.status, sl.name AS location_name,
             bps.status AS bp_status,
             to_char(bps.next_reducer_replacement_at, 'YYYY-MM-DD') AS bp_next_at,
-            (bps.next_reducer_replacement_at - current_date)::int  AS bp_days_left
+            (bps.next_reducer_replacement_at - current_date)::int  AS bp_days_left,
+            to_char(bps.next_membrane_replacement_at, 'YYYY-MM-DD') AS bp_membrane_next_at,
+            (bps.next_membrane_replacement_at - current_date)::int  AS bp_membrane_days_left
        FROM apparatus a
        JOIN backplate bp ON bp.id = a.backplate_id
        JOIN v_apparatus_status vas ON vas.apparatus_id = a.id
@@ -176,15 +228,23 @@ export async function getStationAlerts(stationId: string): Promise<StationAlerts
     const bpCond = backplateCondition({
       status: r.bp_status,
       nextReducerReplacementAt: r.bp_next_at,
-      daysLeft: r.bp_days_left,
+      reducerDaysLeft: r.bp_days_left,
+      nextMembraneReplacementAt: r.bp_membrane_next_at,
+      membraneDaysLeft: r.bp_membrane_days_left,
     });
+    const bpDaysLeft = Math.min(
+      r.bp_days_left ?? Number.MAX_SAFE_INTEGER,
+      r.bp_membrane_days_left ?? Number.MAX_SAFE_INTEGER,
+    );
     const cond = apparatusCondition({ status: r.status, backplate: bpCond, cylinders: comps });
     count(cond.status);
     if (cond.status === 'ok') continue;
     const daysCandidates = comps
       .filter((c) => c.condition.status === cond.status)
       .map((c) => c.daysLeft);
-    if (bpCond.status === cond.status && r.bp_days_left !== null) daysCandidates.push(r.bp_days_left);
+    if (bpCond.status === cond.status && bpDaysLeft !== Number.MAX_SAFE_INTEGER) {
+      daysCandidates.push(bpDaysLeft);
+    }
     const daysLeft = daysCandidates.length ? Math.min(...daysCandidates) : 0;
     items.push({
       entity_type: 'apparatus',

@@ -1,6 +1,6 @@
 import type { PoolClient } from 'pg';
 
-export type ArchiveEntityType = 'cylinder' | 'backplate';
+export type ArchiveEntityType = 'cylinder' | 'backplate' | 'mask';
 
 export interface ArchiveEntry {
   stationId: string;

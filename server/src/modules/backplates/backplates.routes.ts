@@ -21,17 +21,24 @@ backplatesRouter.use(authenticate);
 
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Очікується дата YYYY-MM-DD');
 
-const createSchema = z.object({
+const backplateBaseFields = {
   name: z.string().trim().min(1),
   manufacturer: z.string().trim().min(1).nullish(),
   model: z.string().trim().min(1).nullish(),
   serial_number: z.string().trim().min(1).nullish(),
+  lung_valve_number: z.string().trim().min(1).nullish(),
+  gauge_number: z.string().trim().min(1).nullish(),
   commissioned_at: dateStr.nullish(),
   reducer_last_replaced_at: dateStr.nullish(),
-  reducer_interval_months: z.number().int().positive().nullish(),
+  membrane_replaced_at: dateStr.nullish(),
   notes: z.string().trim().min(1).nullish(),
   station_id: z.string().uuid().optional(), // admin
-});
+};
+
+const createSchema = z.object(backplateBaseFields);
+
+/** Масове створення: name — базова назва, реальні назви — <база>-1..<база>-N. */
+const bulkCreateSchema = z.object({ ...backplateBaseFields, quantity: z.number().int().min(2).max(50) });
 
 const patchSchema = z
   .object({
@@ -39,9 +46,11 @@ const patchSchema = z
     manufacturer: z.string().trim().min(1).nullable().optional(),
     model: z.string().trim().min(1).nullable().optional(),
     serial_number: z.string().trim().min(1).nullable().optional(),
+    lung_valve_number: z.string().trim().min(1).nullable().optional(),
+    gauge_number: z.string().trim().min(1).nullable().optional(),
     commissioned_at: dateStr.nullable().optional(),
     reducer_last_replaced_at: dateStr.nullable().optional(),
-    reducer_interval_months: z.number().int().positive().nullable().optional(),
+    membrane_replaced_at: dateStr.nullable().optional(),
     notes: z.string().trim().min(1).nullable().optional(),
     status: z.enum(['free', 'in_repair']).optional(), // decommissioned — лише через /archive
   })
@@ -53,15 +62,22 @@ const listSchema = listQuerySchema.extend({
 
 const CARD_SELECT = `
   SELECT b.id, b.station_id, b.name, b.manufacturer, b.model, b.serial_number,
+         b.lung_valve_number, b.gauge_number,
          to_char(b.commissioned_at, 'YYYY-MM-DD')          AS commissioned_at,
          to_char(b.reducer_last_replaced_at, 'YYYY-MM-DD') AS reducer_last_replaced_at,
-         b.reducer_interval_months, b.notes, b.status,
+         ri.months AS reducer_interval_months,
+         to_char(b.membrane_replaced_at, 'YYYY-MM-DD')     AS membrane_replaced_at,
+         mi.months AS membrane_interval_months, b.notes, b.status,
          b.created_at, b.updated_at, b.archived_at,
          to_char(bps.next_reducer_replacement_at, 'YYYY-MM-DD') AS next_reducer_replacement_at,
          (bps.next_reducer_replacement_at - current_date)::int  AS reducer_days_left,
+         to_char(bps.next_membrane_replacement_at, 'YYYY-MM-DD') AS next_membrane_replacement_at,
+         (bps.next_membrane_replacement_at - current_date)::int  AS membrane_days_left,
          bps.status AS condition_status,
          a.id AS apparatus_id
     FROM backplate b
+    JOIN interval_setting ri ON ri.key = 'reducer'
+    JOIN interval_setting mi ON mi.key = 'membrane'
     LEFT JOIN v_backplate_status bps ON bps.backplate_id = b.id
     LEFT JOIN apparatus a ON a.backplate_id = b.id AND a.archived_at IS NULL`;
 
@@ -74,15 +90,22 @@ function serialize(row: any) {
     manufacturer: row.manufacturer,
     model: row.model,
     serial_number: row.serial_number,
+    lung_valve_number: row.lung_valve_number,
+    gauge_number: row.gauge_number,
     commissioned_at: row.commissioned_at,
     reducer_last_replaced_at: row.reducer_last_replaced_at,
     reducer_interval_months: row.reducer_interval_months,
     next_reducer_replacement_at: row.next_reducer_replacement_at,
+    membrane_replaced_at: row.membrane_replaced_at,
+    membrane_interval_months: row.membrane_interval_months,
+    next_membrane_replacement_at: row.next_membrane_replacement_at,
     status: row.status,
     condition: backplateCondition({
       status: row.condition_status,
       nextReducerReplacementAt: row.next_reducer_replacement_at,
-      daysLeft: row.reducer_days_left,
+      reducerDaysLeft: row.reducer_days_left,
+      nextMembraneReplacementAt: row.next_membrane_replacement_at,
+      membraneDaysLeft: row.membrane_days_left,
     }),
     apparatus: row.apparatus_id ? { id: row.apparatus_id, name: row.name } : null,
     notes: row.notes,
@@ -244,17 +267,20 @@ backplatesRouter.post(
     const id = await withTransaction(async (client) => {
       const { rows } = await client.query(
         `INSERT INTO backplate (station_id, name, manufacturer, model, serial_number,
-                                commissioned_at, reducer_last_replaced_at, reducer_interval_months, notes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+                                lung_valve_number, gauge_number,
+                                commissioned_at, reducer_last_replaced_at, membrane_replaced_at, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
         [
           stationId,
           body.name,
           body.manufacturer ?? null,
           body.model ?? null,
           body.serial_number ?? null,
+          body.lung_valve_number ?? null,
+          body.gauge_number ?? null,
           body.commissioned_at ?? null,
           body.reducer_last_replaced_at ?? null,
-          body.reducer_interval_months ?? null,
+          body.membrane_replaced_at ?? null,
           body.notes ?? null,
         ],
       );
@@ -270,6 +296,67 @@ backplatesRouter.post(
       return rows[0].id as string;
     });
     res.status(201).json(serialize(await getCardOr404(id)));
+  }),
+);
+
+/** Масове створення: quantity ложаментів з назвами <база>-1..<база>-N, решта полів спільні. */
+backplatesRouter.post(
+  '/bulk',
+  requireRole('master', 'admin'),
+  asyncHandler(async (req, res) => {
+    const body = parse(bulkCreateSchema, req.body);
+    const stationId = resolveWriteStation(req, body.station_id ?? null);
+    const names = Array.from({ length: body.quantity }, (_, i) => `${body.name}-${i + 1}`);
+    const { rows: taken } = await pool.query(
+      `SELECT name FROM backplate
+        WHERE station_id = $1 AND lower(name) = ANY($2::text[]) AND archived_at IS NULL`,
+      [stationId, names.map((n) => n.toLowerCase())],
+    );
+    if (taken.length > 0) {
+      throw errors.duplicateName(
+        `Назви вже зайняті: ${taken.map((r) => r.name).join(', ')} — змініть базову назву`,
+      );
+    }
+    const ids = await withTransaction(async (client) => {
+      const createdIds: string[] = [];
+      for (const name of names) {
+        const { rows } = await client.query(
+          `INSERT INTO backplate (station_id, name, manufacturer, model, serial_number,
+                                  lung_valve_number, gauge_number,
+                                  commissioned_at, reducer_last_replaced_at, membrane_replaced_at, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+          [
+            stationId,
+            name,
+            body.manufacturer ?? null,
+            body.model ?? null,
+            body.serial_number ?? null,
+            body.lung_valve_number ?? null,
+            body.gauge_number ?? null,
+            body.commissioned_at ?? null,
+            body.reducer_last_replaced_at ?? null,
+            body.membrane_replaced_at ?? null,
+            body.notes ?? null,
+          ],
+        );
+        const backplateId = rows[0].id as string;
+        await writeAudit(client, {
+          userId: req.user!.id,
+          stationId,
+          entityType: 'backplate',
+          entityId: backplateId,
+          action: 'create',
+          changes: { name: { old: null, new: name } },
+          requestId: req.requestId,
+        });
+        createdIds.push(backplateId);
+      }
+      return createdIds;
+    });
+    const cards = await Promise.all(ids.map((bid) => getCardOr404(bid)));
+    res.status(201).json(
+      listEnvelope(cards.map(serialize), { page: 1, limit: ids.length, total: ids.length }),
+    );
   }),
 );
 
@@ -308,9 +395,11 @@ backplatesRouter.patch(
       'manufacturer',
       'model',
       'serial_number',
+      'lung_valve_number',
+      'gauge_number',
       'commissioned_at',
       'reducer_last_replaced_at',
-      'reducer_interval_months',
+      'membrane_replaced_at',
       'notes',
       'status',
     ] as const) {
